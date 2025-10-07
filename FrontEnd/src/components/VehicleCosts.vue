@@ -84,7 +84,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { useCostsStore } from 'stores/costs-store';
+import { useVehicleCostStore } from 'stores/costs-store';
 import type { QTableProps } from 'quasar';
 import { format, parse } from 'date-fns';
 
@@ -94,7 +94,7 @@ const props = defineProps<{
 }>();
 
 // 2. Setup das Stores e Refs
-const costsStore = useCostsStore();
+const costsStore = useVehicleCostStore();
 const isDialogOpen = ref(false);
 const isSubmitting = ref(false);
 const costTypeOptions = ['Manutenção', 'Combustível', 'Impostos', 'Seguro', 'Limpeza', 'Outros'];
@@ -137,7 +137,7 @@ async function onFormSubmit() {
       ...formData.value,
       date: format(parsedDate, 'yyyy-MM-dd'),
     };
-    await costsStore.addCostToVehicle(props.vehicleId, payload);
+    await costsStore.addCost(props.vehicleId, payload);
     isDialogOpen.value = false;
   } finally {
     isSubmitting.value = false;

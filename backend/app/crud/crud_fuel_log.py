@@ -4,18 +4,40 @@ from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from geopy.distance import geodesic
 
+# --- Adicione esta importação ---
+from app import crud
 from app.models.fuel_log_model import FuelLog, VerificationStatus
 from app.models.vehicle_model import Vehicle
 from app.models.user_model import User
+# --- Adicione esta importação ---
+from app.schemas.vehicle_cost_schema import VehicleCostCreate
 from app.schemas.fuel_log_schema import FuelLogCreate, FuelLogUpdate, FuelProviderTransaction
 
-
-# --- Funções CRUD para Abastecimento Manual ---
-
 async def create_fuel_log(db: AsyncSession, *, log_in: FuelLogCreate, user_id: int, organization_id: int) -> FuelLog:
-    """Cria um novo registo de abastecimento manual."""
+    """Cria um novo registo de abastecimento manual e um custo associado."""
     db_obj = FuelLog(**log_in.model_dump(), user_id=user_id, organization_id=organization_id)
     db.add(db_obj)
+    await db.flush()  # Garante que o db_obj tenha um ID antes de usá-lo
+
+    # --- LÓGICA ADICIONADA ---
+    # Cria um custo correspondente do tipo "Combustível"
+    cost_obj_in = VehicleCostCreate(
+        description=f"Abastecimento em {db_obj.timestamp.strftime('%d/%m/%Y')}",
+        amount=db_obj.total_cost,
+        date=db_obj.timestamp.date(),
+        cost_type="Combustível",
+    )
+    
+    # Reutiliza o CRUD de custos para criar o novo registro de custo
+    await crud.vehicle_cost.create_cost(
+        db, 
+        obj_in=cost_obj_in, 
+        vehicle_id=db_obj.vehicle_id, 
+        organization_id=organization_id,
+        commit=False  # Evita o commit duplo
+    )
+    # --- FIM DA LÓGICA ADICIONADA ---
+
     await db.commit()
     await db.refresh(db_obj, ["user", "vehicle"])
     return db_obj
@@ -125,4 +147,3 @@ async def process_provider_transactions(db: AsyncSession, *, transactions: List[
 
     await db.commit()
     return {"new_logs_processed": new_logs_count}
-

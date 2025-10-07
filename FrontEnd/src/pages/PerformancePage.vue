@@ -16,23 +16,23 @@
       <!-- 2º LUGAR -->
       <div v-if="leaderboard[1]" class="col-4 text-center podium-card silver">
         <q-avatar size="80px"><img :src="leaderboard[1].avatar_url || defaultAvatar" /></q-avatar>
-        <div class="text-weight-bold q-mt-sm ellipsis">{{ leaderboard[1].full_name }}</div>
-        <div class="text-h5 text-weight-bolder">{{ leaderboard[1].primary_metric_value.toFixed(1) }}</div>
-        <div class="text-caption text-grey-7">{{ unit }}</div>
+        <div class="text-weight-bold text-black q-mt-sm ellipsis">{{ leaderboard[1].full_name }}</div>
+        <div class="text-h5 text-black text-weight-bolder">{{ leaderboard[1].primary_metric_value.toFixed(1) }}</div>
+        <div class="text-caption text-black">{{ unit }}</div>
       </div>
       <!-- 1º LUGAR -->
       <div v-if="leaderboard[0]" class="col-4 text-center podium-card gold">
         <q-avatar size="100px"><img :src="leaderboard[0].avatar_url || defaultAvatar" /></q-avatar>
-        <div class="text-weight-bold q-mt-sm ellipsis">{{ leaderboard[0].full_name }}</div>
-        <div class="text-h4 text-weight-bolder">{{ leaderboard[0].primary_metric_value.toFixed(1) }}</div>
-        <div class="text-caption text-grey-7">{{ unit }}</div>
+        <div class="text-weight-bold text-black q-mt-sm ellipsis">{{ leaderboard[0].full_name }}</div>
+        <div class="text-h4 text-black text-weight-bolder">{{ leaderboard[0].primary_metric_value.toFixed(1) }}</div>
+        <div class="text-caption text-black">{{ unit }}</div>
       </div>
       <!-- 3º LUGAR -->
       <div v-if="leaderboard[2]" class="col-4 text-center podium-card bronze">
         <q-avatar size="70px"><img :src="leaderboard[2].avatar_url || defaultAvatar" /></q-avatar>
-        <div class="text-weight-bold q-mt-sm ellipsis">{{ leaderboard[2].full_name }}</div>
-        <div class="text-h6 text-weight-bolder">{{ leaderboard[2].primary_metric_value.toFixed(1) }}</div>
-        <div class="text-caption text-grey-7">{{ unit }}</div>
+        <div class="text-weight-bold text-black q-mt-sm ellipsis">{{ leaderboard[2].full_name }}</div>
+        <div class="text-h6 text-black text-weight-bolder">{{ leaderboard[2].primary_metric_value.toFixed(1) }}</div>
+        <div class="text-caption text-black">{{ unit }}</div>
       </div>
     </div>
 
