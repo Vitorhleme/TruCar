@@ -34,16 +34,29 @@
         </div>
 
         <!-- KPIS DE STATUS E EFICIÊNCIA -->
-        <div class="row q-col-gutter-lg q-mb-lg">
-          <div class="col-12 col-sm-6 col-md-2"><StatCard label="Total de Veículos" :value="kpis?.total_vehicles ?? 0" icon="local_shipping" color="primary" :loading="dashboardStore.isLoading" to="/vehicles"/></div>
-          <div class="col-12 col-sm-6 col-md-2"><StatCard label="Disponíveis" :value="kpis?.available_vehicles ?? 0" icon="check_circle_outline" color="positive" :loading="dashboardStore.isLoading" to="/vehicles?status=available"/></div>
-          <div class="col-12 col-sm-6 col-md-2"><StatCard :label="journeyNounInProgress" :value="kpis?.in_use_vehicles ?? 0" icon="alt_route" color="warning" :loading="dashboardStore.isLoading" to="/vehicles?status=in_use"/></div>
-          <div class="col-12 col-sm-6 col-md-2"><StatCard label="Em Manutenção" :value="kpis?.maintenance_vehicles ?? 0" icon="build" color="negative" :loading="dashboardStore.isLoading" to="/maintenance"/></div>
-          <div class="col-12 col-sm-6 col-md-2"><StatCard label="Custo por KM" :value="`R$ ${efficiencyKpis?.cost_per_km.toFixed(2) ?? '0.00'}`" icon="paid" color="deep-purple" :loading="dashboardStore.isLoading"/></div>
-          <div class="col-12 col-sm-6 col-md"><StatCard label="Gasto Combustível" :value="`R$ ${fuelCostTotal.toFixed(2)}`" icon="local_gas_station" color="orange-9" :loading="dashboardStore.isLoading"/></div>
-          <div class="col-12 col-sm-6 col-md-2"><StatCard label="Taxa de Utilização" :value="`${efficiencyKpis?.utilization_rate.toFixed(1) ?? '0.0'}%`" icon="pie_chart" color="teal" :loading="dashboardStore.isLoading"/></div>
-        </div>
-
+      <div class="row q-col-gutter-lg q-mb-lg">
+    <div class="col-12 col-sm-6 col-lg-3">
+        <StatCard label="Total de Veículos" :value="kpis?.total_vehicles ?? 0" icon="local_shipping" color="primary" :loading="dashboardStore.isLoading" to="/vehicles"/>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <StatCard label="Disponíveis" :value="kpis?.available_vehicles ?? 0" icon="check_circle_outline" color="positive" :loading="dashboardStore.isLoading" to="/vehicles?status=available"/>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <StatCard :label="journeyNounInProgress" :value="kpis?.in_use_vehicles ?? 0" icon="alt_route" color="warning" :loading="dashboardStore.isLoading" to="/vehicles?status=in_use"/>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <StatCard label="Em Manutenção" :value="kpis?.maintenance_vehicles ?? 0" icon="build" color="negative" :loading="dashboardStore.isLoading" to="/maintenance"/>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <StatCard label="Custo por KM" :value="`R$ ${efficiencyKpis?.cost_per_km.toFixed(2) ?? '0.00'}`" icon="paid" color="deep-purple" :loading="dashboardStore.isLoading"/>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <StatCard label="Gasto Combustível" :value="`R$ ${fuelCostTotal.toFixed(2)}`" icon="local_gas_station" color="orange-9" :loading="dashboardStore.isLoading"/>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <StatCard label="Taxa de Utilização" :value="`${efficiencyKpis?.utilization_rate.toFixed(1) ?? '0.0'}%`" icon="pie_chart" color="teal" :loading="dashboardStore.isLoading"/>
+    </div>
+</div>
         <!-- LAYOUT PRINCIPAL DO DASHBOARD (MAPA, GRÁFICOS E WIDGETS DE AÇÃO) -->
         <div class="row q-col-gutter-lg" v-if="dashboardStore.managerDashboard">
           <!-- Coluna Esquerda (Mais larga) -->
@@ -494,4 +507,3 @@ const lineChart = computed(() => {
   }
 }
 </style>
-

@@ -18,7 +18,7 @@ from app.models.vehicle_cost_model import VehicleCost
 from app.schemas.report_schema import FleetManagementReport, VehicleRankingEntry, FleetReportSummary, DriverPerformanceEntry, VehicleConsolidatedReport, VehicleReportPerformanceSummary, VehicleReportFinancialSummary, DriverPerformanceReport  # <-- ImportarDriverPerformanceEntry
 from app.models.fuel_log_model import FuelLog
 from app.models.maintenance_model import MaintenanceRequest
-
+from typing import Dict
 
 # --- NOVA FUNÇÃO HELPER ---
 
