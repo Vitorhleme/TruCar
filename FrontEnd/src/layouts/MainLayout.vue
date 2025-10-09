@@ -9,8 +9,8 @@
     >
       <q-scroll-area class="fit">
         <div class="q-pa-md text-center sidebar-header">
-           <img src="~assets/trucar-logo-white.png" class="logo-dark-theme" style="height: 35px;" alt="TruCar Logo">
-           <img src="~assets/trucar-logo-dark.png" class="logo-light-theme" style="height: 35px;" alt="TruCar Logo">
+            <img src="~assets/trucar-logo-white.png" class="logo-dark-theme" style="height: 35px;" alt="TruCar Logo">
+            <img src="~assets/trucar-logo-dark.png" class="logo-light-theme" style="height: 35px;" alt="TruCar Logo">
         </div>
         
         <q-list padding>
@@ -82,13 +82,50 @@
         
         <q-btn v-if="authStore.isManager" flat round dense icon="notifications" class="q-mr-sm toolbar-icon-btn">
           <q-badge v-if="notificationStore.unreadCount > 0" color="red" floating>{{ notificationStore.unreadCount }}</q-badge>
-          <q-menu @show="notificationStore.fetchNotifications()" style="width: 350px">
-            <q-list bordered separator><q-item-label header>Notificações</q-item-label></q-list>
+          <q-menu @show="notificationStore.fetchNotifications()" style="width: 380px; max-height: 500px;">
+            <q-list separator>
+              <q-item-label header class="flex justify-between items-center">
+                <span>Notificações</span>
+                <q-spinner v-if="notificationStore.isLoading" color="primary" size="1.2em" />
+              </q-item-label>
+
+              <q-scroll-area style="height: 350px;">
+                <div v-if="!notificationStore.isLoading && notificationStore.notifications.length === 0" class="text-center text-grey q-pa-lg">
+                  <q-icon name="notifications_off" size="3em" />
+                  <div>Nenhuma notificação por aqui.</div>
+                </div>
+                
+                <q-item
+                  v-for="notification in notificationStore.notifications"
+                  :key="notification.id"
+                  clickable
+                  v-ripple
+                  :class="{ 'bg-blue--1': !notification.is_read }"
+                  @click="handleNotificationClick(notification)"
+                >
+                  <q-item-section avatar>
+                    <q-avatar :icon="getNotificationIcon(notification.notification_type)" :color="notification.is_read ? 'grey-5' : 'primary'" text-color="white" size="md" />
+                  </q-item-section>
+
+                  <q-item-section>
+                    <q-item-label lines="2">{{ notification.message }}</q-item-label>
+                    <q-item-label caption>{{ formatNotificationDate(notification.created_at) }}</q-item-label>
+                  </q-item-section>
+
+                  <q-item-section side top>
+                     <q-badge v-if="!notification.is_read" color="blue" label="Nova" rounded />
+                  </q-item-section>
+                </q-item>
+              </q-scroll-area>
+            </q-list>
           </q-menu>
         </q-btn>
-        
         <q-btn-dropdown flat :label="authStore.user?.full_name || 'Usuário'">
           <q-list>
+            <q-item clickable v-close-popup :to="`/users/${authStore.user?.id}/stats`" v-if="authStore.isDriver">
+                <q-item-section avatar><q-icon name="query_stats" /></q-item-section>
+                <q-item-section>Minhas Estatísticas</q-item-section>
+            </q-item>
             <q-item clickable v-close-popup @click="handleLogout">
               <q-item-section avatar><q-icon name="logout" /></q-item-section>
               <q-item-section>Sair</q-item-section>
@@ -128,6 +165,11 @@ import { useAuthStore } from 'stores/auth-store';
 import { useNotificationStore } from 'stores/notification-store';
 import { useTerminologyStore } from 'stores/terminology-store';
 import { useDemoStore } from 'stores/demo-store';
+// --- IMPORTAÇÕES ADICIONADAS ---
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import type { Notification } from 'src/models/notification-models';
+// --- FIM DAS IMPORTAÇÕES ---
 
 const leftDrawerOpen = ref(false);
 const router = useRouter();
@@ -144,6 +186,12 @@ interface MenuItem {
   icon: string;
   to: string;
 } 
+
+interface MenuCategory {
+    label: string;
+    icon: string;
+    children: MenuItem[];
+}
 
 function toggleLeftDrawer() { leftDrawerOpen.value = !leftDrawerOpen.value; }
 function handleLogout() {
@@ -166,72 +214,146 @@ function showUpgradeDialog() {
   });
 }
 
-const menuStructure = computed(() => {
-  const sector = authStore.userSector;
-  const isManager = authStore.isManager;
-  const menu = [];
+// --- FUNÇÕES ADICIONADAS PARA O MENU DE NOTIFICAÇÕES ---
+function formatNotificationDate(date: string) {
+  return formatDistanceToNow(new Date(date), { addSuffix: true, locale: ptBR });
+}
 
-  const general = {
-    label: 'Geral', icon: 'dashboard',
-    children: [
-      { title: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
-      { title: 'Mapa em Tempo Real', icon: 'map', to: '/live-map' },
-    ]
+function getNotificationIcon(type: string): string {
+  const iconMap: Record<string, string> = {
+    'maintenance_due_date': 'event_busy',
+    'maintenance_due_km': 'speed',
+    'maintenance_request_new': 'build',
+    'new_fine_registered': 'receipt_long',
+    'document_expiring': 'badge',
+    'low_stock': 'inventory_2',
+    'journey_started': 'play_arrow',
+    'journey_ended': 'stop',
   };
-  menu.push(general);
+  return iconMap[type] || 'notifications';
+}
 
-  const operations = { label: 'Operações', icon: 'alt_route', children: [] as MenuItem[] };
-  if (sector === 'agronegocio' || sector === 'servicos') {
-    operations.children.push({ title: terminologyStore.journeyPageTitle, icon: 'route', to: '/journeys' });
+async function handleNotificationClick(notification: Notification) {
+  if (!notification.is_read) {
+    await notificationStore.markAsRead(notification.id);
   }
-  if (sector === 'frete' && isManager) {
-    operations.children.push({ title: 'Ordens de Frete', icon: 'list_alt', to: '/freight-orders' });
+  
+  if (notification.related_entity_type === 'maintenance_request') {
+    void router.push('/maintenance'); // Navega para a página de manutenções
   }
-  if (sector === 'frete' && !isManager) {
-    operations.children.push({ title: 'Minha Rota', icon: 'explore', to: '/driver-cockpit' });
-  }
-  if (operations.children.length > 0) {
-    menu.push(operations);
-  }
+  // Adicione outras lógicas de navegação aqui conforme necessário
+}
+// --- FIM DAS FUNÇÕES ADICIONADAS ---
 
-if (isManager) {
-    const management = { label: 'Gestão', icon: 'settings_suggest', children: [] as MenuItem[] };
-    if (sector === 'agronegocio' || sector === 'servicos' || sector === 'frete') {
-      management.children.push({ title: terminologyStore.vehiclePageTitle, icon: 'local_shipping', to: '/vehicles' });
+const menuStructure = computed(() => {
+    if (authStore.isManager) {
+        return getManagerMenu();
     }
-    if (sector === 'agronegocio') {
-      management.children.push({ title: 'Implementos', icon: 'precision_manufacturing', to: '/implements' });
+    if (authStore.isDriver) {
+        return getDriverMenu();
+    }
+    return [];
+});
+
+function getDriverMenu(): MenuCategory[] {
+    const sector = authStore.userSector;
+    const menu: MenuCategory[] = [];
+
+    const general: MenuCategory = {
+        label: 'Principal',
+        icon: 'dashboard',
+        children: [
+            { title: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
+            { title: 'Mapa em Tempo Real', icon: 'public', to: '/live-map' },
+        ],
+    };
+    if (sector === 'frete') {
+        general.children.push({ title: 'Minha Rota', icon: 'explore', to: '/driver-cockpit' });
+    }
+    menu.push(general);
+
+    const operations: MenuCategory = {
+        label: 'Minhas Atividades',
+        icon: 'work_history',
+        children: [
+            { title: terminologyStore.journeyPageTitle, icon: 'route', to: '/journeys' },
+            { title: 'Abastecimentos', icon: 'local_gas_station', to: '/fuel-logs' },
+            { title: 'Minhas Multas', icon: 'receipt_long', to: '/fines' },
+            { title: 'Manutenções', icon: 'build', to: '/maintenance' },
+        ],
+    };
+    menu.push(operations);
+
+    const fleet: MenuCategory = {
+        label: 'Frota',
+        icon: 'local_shipping',
+        children: [
+            { title: terminologyStore.vehiclePageTitle, icon: 'local_shipping', to: '/vehicles' }
+        ]
+    };
+    menu.push(fleet);
+
+    return menu;
+}
+
+
+function getManagerMenu(): MenuCategory[] {
+    const sector = authStore.userSector;
+    const menu: MenuCategory[] = [];
+
+    const general: MenuCategory = {
+        label: 'Geral', icon: 'dashboard',
+        children: [
+            { title: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
+            { title: 'Mapa em Tempo Real', icon: 'map', to: '/live-map' },
+        ]
+    };
+    menu.push(general);
+
+    const operations: MenuCategory = { label: 'Operações', icon: 'alt_route', children: [] as MenuItem[] };
+    if (sector === 'agronegocio' || sector === 'servicos') {
+        operations.children.push({ title: terminologyStore.journeyPageTitle, icon: 'route', to: '/journeys' });
     }
     if (sector === 'frete') {
-      management.children.push({ title: 'Clientes', icon: 'groups', to: '/clients' });
+        operations.children.push({ title: 'Ordens de Frete', icon: 'list_alt', to: '/freight-orders' });
+    }
+    if (operations.children.length > 0) {
+        menu.push(operations);
+    }
+
+    const management: MenuCategory = { label: 'Gestão', icon: 'settings_suggest', children: [] as MenuItem[] };
+    if (sector === 'agronegocio' || sector === 'servicos' || sector === 'frete') {
+        management.children.push({ title: terminologyStore.vehiclePageTitle, icon: 'local_shipping', to: '/vehicles' });
+    }
+    if (sector === 'agronegocio') {
+        management.children.push({ title: 'Implementos', icon: 'precision_manufacturing', to: '/implements' });
+    }
+    if (sector === 'frete') {
+        management.children.push({ title: 'Clientes', icon: 'groups', to: '/clients' });
     }
     management.children.push({ title: 'Gestão de Utilizadores', icon: 'manage_accounts', to: '/users' });
     management.children.push({ title: 'Inventário', icon: 'inventory_2', to: '/parts' });
     management.children.push({ title: 'Gestão de Custos', icon: 'monetization_on', to: '/costs' });
     management.children.push({ title: 'Abastecimentos', icon: 'local_gas_station', to: '/fuel-logs' });
     management.children.push({ title: 'Documentos', icon: 'folder_shared', to: '/documents' });
-
     if (management.children.length > 0) {
-      menu.push(management);
+        menu.push(management);
     }
-  }
 
-if (isManager) {
-    const analysis = {
-      label: 'Análise', icon: 'analytics',
-      children: [
-        { title: 'Ranking de Motoristas', icon: 'leaderboard', to: '/performance' },
-        { title: 'Relatórios', icon: 'summarize', to: '/reports' },
-        { title: 'Manutenções', icon: 'build', to: '/maintenance' },
-        { title: 'Gestão de Multas', icon: 'receipt_long', to: '/fines' },
-
-      ]
+    const analysis: MenuCategory = {
+        label: 'Análise', icon: 'analytics',
+        children: [
+            { title: 'Ranking de Motoristas', icon: 'leaderboard', to: '/performance' },
+            { title: 'Relatórios', icon: 'summarize', to: '/reports' },
+            { title: 'Manutenções', icon: 'build', to: '/maintenance' },
+            { title: 'Gestão de Multas', icon: 'receipt_long', to: '/fines' },
+        ]
     };
     menu.push(analysis);
-  }
-  
-  return menu;
-});
+    
+    return menu;
+}
+
 
 onMounted(() => {
   if (isDemo.value) {
@@ -255,9 +377,7 @@ onUnmounted(() => { clearInterval(pollTimer); });
   }
 }
 
-// ESTILOS DO MENU LATERAL (SIDEBAR)
 .app-sidebar {
-  // Tema Claro
   background-color: #ffffff;
   border-right: 1px solid #e0e0e0;
 
@@ -275,7 +395,7 @@ onUnmounted(() => { clearInterval(pollTimer); });
   }
 
   .nav-link {
-    color: #333333; // Texto escuro para melhor leitura
+    color: #333333;
     margin: 4px 12px;
     border-radius: 8px;
     transition: all 0.2s ease-in-out;
@@ -297,11 +417,10 @@ onUnmounted(() => { clearInterval(pollTimer); });
   }
 }
 
-// Estilos do menu lateral para o TEMA ESCURO
 .body--dark .app-sidebar {
-  background-color: #1d2d35; // Cor escura para a sidebar
+  background-color: #1d2d35;
   border-right-color: #2d3748;
-  color: #aeb9c6; // Cor de texto padrão
+  color: #aeb9c6;
 
   .sidebar-header {
     .logo-dark-theme { display: block; }
@@ -330,8 +449,6 @@ onUnmounted(() => { clearInterval(pollTimer); });
   }
 }
 
-
-// ESTILOS DO CABEÇALHO SUPERIOR
 .main-header {
   background-color: white;
   color: $grey-9;
@@ -343,7 +460,6 @@ onUnmounted(() => { clearInterval(pollTimer); });
   }
 }
 
-// ESTILOS GERAIS
 .app-page-container {
   background-color: #f4f6f9;
 

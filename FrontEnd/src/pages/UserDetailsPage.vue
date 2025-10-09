@@ -1,7 +1,6 @@
 <template>
   <q-page padding>
-
-    <div v-if="isDemo" class="column flex-center text-center q-pa-md" style="min-height: 80vh;">
+    <div v-if="isDemo && authStore.isManager" class="column flex-center text-center q-pa-md" style="min-height: 80vh;">
       <div>
         <q-icon name="workspace_premium" color="amber" size="100px" />
         <div class="text-h5 q-mt-sm">Esta é uma funcionalidade do plano completo</div>
@@ -16,7 +15,6 @@
           unelevated
           class="q-mt-lg"
         />
-        
         <q-btn flat color="grey-8" label="Voltar" @click="router.back()" class="q-mt-sm" />
       </div>
     </div>
@@ -31,7 +29,7 @@
           <q-btn flat round dense icon="arrow_back" @click="router.back()" aria-label="Voltar" />
           <div>
             <h1 class="text-h4 text-weight-bold q-my-none">Painel de Performance</h1>
-            <div class="text-subtitle1 text-grey-7">{{ userStore.selectedUser?.full_name }}</div>
+            <div class="text-subtitle1 text-grey-7">{{ userName }}</div>
           </div>
         </div>
 
@@ -71,7 +69,7 @@
               </template>
               <div class="col-12 col-sm-6">
                 <KpiCard
-                  label="Viagens Realizadas"
+                  :label="`${terminologyStore.journeyNounPlural} Realizadas`"
                   :value="stats.total_journeys"
                   icon="route"
                 />
@@ -91,7 +89,7 @@
           <div class="col-12" :class="shouldShowFuelChart ? 'col-lg-7' : 'col-lg-12'">
              <q-card flat bordered class="floating-card">
               <q-card-section>
-                <div class="text-h6 text-weight-medium">Performance por Veículo</div>
+                <div class="text-h6 text-weight-medium">Performance por {{ terminologyStore.vehicleNoun }}</div>
                 <ApexChart type="bar" height="350" :options="performanceByVehicleChart.options" :series="performanceByVehicleChart.series" />
               </q-card-section>
             </q-card>
@@ -121,7 +119,8 @@ import { onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { useUserStore } from 'stores/user-store';
-import { useAuthStore } from 'stores/auth-store'; // <-- ADICIONADO
+import { useAuthStore } from 'stores/auth-store';
+import { useTerminologyStore } from 'stores/terminology-store';
 import type { PerformanceByVehicle, UserStats } from 'src/models/user-models';
 import ApexChart from 'vue3-apexcharts';
 import KpiCard from 'components/KpiCard.vue';
@@ -130,10 +129,10 @@ const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 const $q = useQuasar();
-const authStore = useAuthStore(); // <-- ADICIONADO
+const authStore = useAuthStore();
+const terminologyStore = useTerminologyStore();
 
-// --- LÓGICA DE BLOQUEIO ADICIONADA ---
-const isDemo = computed(() => authStore.user?.role === 'cliente_demo');
+const isDemo = computed(() => authStore.isDemo);
 
 function showUpgradeDialog() {
   $q.dialog({
@@ -143,9 +142,19 @@ function showUpgradeDialog() {
     persistent: false
   });
 }
-// --- FIM DA ADIÇÃO ---
 
 const stats = computed(() => userStore.selectedUserStats as UserStats);
+
+// --- CORREÇÃO: Nome do usuário dinâmico ---
+const userName = computed(() => {
+    // Se for motorista vendo a própria página, usa o nome do authStore
+    if (authStore.isDriver) {
+        return authStore.user?.full_name;
+    }
+    // Se for gestor, usa o nome do usuário que foi carregado no userStore
+    return userStore.selectedUser?.full_name;
+});
+// --- FIM DA CORREÇÃO ---
 
 const shouldShowFuelChart = computed(() => {
   return stats.value?.primary_metric_unit === 'km' && stats.value?.avg_km_per_liter !== null;
@@ -211,10 +220,14 @@ const performanceByVehicleChart = computed(() => {
 function fetchData() {
   const userId = Number(route.params.id);
   if (userId) {
-    void Promise.all([
-      userStore.fetchUserStats(userId),
-      userStore.fetchUserById(userId)
-    ]);
+    const promises = [userStore.fetchUserStats(userId)];
+    
+    // CORREÇÃO: Apenas busca os dados do usuário se for um gestor
+    if (authStore.isManager) {
+        promises.push(userStore.fetchUserById(userId));
+    }
+    
+    void Promise.all(promises);
   }
 }
 

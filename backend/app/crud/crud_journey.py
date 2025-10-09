@@ -93,10 +93,6 @@ async def end_journey(
     db: AsyncSession, *, db_journey: Journey, journey_in: JourneyUpdate
 ) -> Tuple[Journey, Vehicle]:
     """Finaliza uma operação, atualiza o status E o odómetro/horímetro do veículo."""
-    
-    print(f"--- INICIANDO FINALIZAÇÃO DA JORNADA {db_journey.id} ---")
-    print(f"Payload recebido: {journey_in.model_dump()}")
-
     # --- INÍCIO DA CORREÇÃO DEFINITIVA ---
 
     # 1. ATUALIZAR A JORNADA

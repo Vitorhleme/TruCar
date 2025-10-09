@@ -7,57 +7,133 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
     children: [
       { path: '', redirect: '/dashboard' },
-      { path: 'dashboard', name: 'dashboard', component: () => import('pages/DashboardPage.vue') },
-      { path: 'vehicles', name: 'vehicles', component: () => import('pages/VehiclesPage.vue') },
-      { path: 'journeys', name: 'journeys', component: () => import('pages/JourneysPage.vue') },
-      { path: 'users', name: 'users', component: () => import('pages/UsersPage.vue') },
-      { path: 'users/:id/stats', name: 'user-stats', component: () => import('pages/UserDetailsPage.vue') },
-      { path: 'maintenance', name: 'maintenance', component: () => import('pages/MaintenancePage.vue') },
-      { path: 'map', name: 'map', component: () => import('pages/MapPage.vue') },
-      { path: 'fuel-logs', name: 'fuel-logs', component: () => import('pages/FuelLogsPage.vue') },
-      { path: 'performance', name: 'performance', component: () => import('pages/PerformancePage.vue') },
-      { path: 'reports', name: 'reports', component: () => import('pages/ReportsPage.vue') },
-      { path: 'implements', name: 'implements', component: () => import('pages/ImplementsPage.vue')},
-      { path: 'live-map', component: () => import('pages/LiveMapPage.vue')},
-      { path: 'freight-orders', component: () => import('pages/FreightOrdersPage.vue') },
-      { path: 'driver-cockpit', component: () => import('pages/DriverCockpitPage.vue') },
-      { path: 'clients', component: () => import('pages/ClientsPage.vue') },
-      { path: 'vehicles/:id', name: 'vehicle-details', component: () => import('pages/VehicleDetailsPage.vue') },
-    {
+      { 
+        path: 'dashboard', 
+        name: 'dashboard', 
+        component: () => import('pages/DashboardPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo', 'driver'] }
+      },
+      { 
+        path: 'vehicles', 
+        name: 'vehicles', 
+        component: () => import('pages/VehiclesPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo', 'driver'] }
+      },
+      { 
+        path: 'journeys', 
+        name: 'journeys', 
+        component: () => import('pages/JourneysPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo', 'driver'] }
+      },
+      { 
+        path: 'users', 
+        name: 'users', 
+        component: () => import('pages/UsersPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo'] }
+      },
+      { 
+        path: 'users/:id/stats', 
+        name: 'user-stats', 
+        component: () => import('pages/UserDetailsPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo', 'driver'] } // Driver pode ver o seu
+      },
+      { 
+        path: 'maintenance', 
+        name: 'maintenance', 
+        component: () => import('pages/MaintenancePage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo', 'driver'] }
+      },
+      { 
+        path: 'map', 
+        name: 'map', 
+        component: () => import('pages/MapPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo'] } // Geralmente só gestor
+      },
+      { 
+        path: 'fuel-logs', 
+        name: 'fuel-logs', 
+        component: () => import('pages/FuelLogsPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo', 'driver'] }
+      },
+      { 
+        path: 'performance', 
+        name: 'performance', 
+        component: () => import('pages/PerformancePage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo'] }
+      },
+      { 
+        path: 'reports', 
+        name: 'reports', 
+        component: () => import('pages/ReportsPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo'] }
+      },
+      { 
+        path: 'implements', 
+        name: 'implements', 
+        component: () => import('pages/ImplementsPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo'] }
+      },
+      { 
+        path: 'live-map', 
+        component: () => import('pages/LiveMapPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo', 'driver'] }
+      },
+      { 
+        path: 'freight-orders', 
+        component: () => import('pages/FreightOrdersPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo'] }
+      },
+      { 
+        path: 'driver-cockpit', 
+        component: () => import('pages/DriverCockpitPage.vue'),
+        meta: { roles: ['driver'] }
+      },
+      { 
+        path: 'clients', 
+        component: () => import('pages/ClientsPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo'] }
+      },
+      { 
+        path: 'vehicles/:id', 
+        name: 'vehicle-details', 
+        component: () => import('pages/VehicleDetailsPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo', 'driver'] }
+      },
+      {
         path: 'costs',
         name: 'costs',
         component: () => import('pages/CostsPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo'] }
       },
-        {
+      {
         path: 'documents',
         name: 'documents',
         component: () => import('pages/DocumentPage.vue'),
-        meta: { requiresAuth: true, roles: ['cliente_ativo', 'cliente_demo'] }
+        meta: { roles: ['cliente_ativo', 'cliente_demo', 'driver'] }
       },
       {
         path: 'parts',
         name: 'parts',
         component: () => import('pages/PartsPage.vue'),
-        meta: { requiresAuth: true }
+        meta: { roles: ['cliente_ativo', 'cliente_demo'] }
       },
-
       {
-  path: 'fines',
-  component: () => import('pages/FinesPage.vue'),
-  meta: { requiresAuth: true, roles: ['cliente_ativo', 'cliente_demo'] }
-},
-
-    
-      { path: 'settings', name: 'settings', component: () => import('pages/SettingsPage.vue'), 
-      
+        path: 'fines',
+        name: 'fines',
+        component: () => import('pages/FinesPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo', 'driver'] }
       },
-
-      // --- ROTA DO PAINEL ADMIN ADICIONADA ---
+      { 
+        path: 'settings', 
+        name: 'settings', 
+        component: () => import('pages/SettingsPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo', 'driver'] }
+      },
       {
         path: 'admin',
         name: 'admin',
         component: () => import('pages/AdminPage.vue'),
-        // Podemos adicionar uma proteção de rota aqui no futuro se necessário
+        meta: { requiresAuth: true } // Protegido por v-if no layout
       },
     ],
   },

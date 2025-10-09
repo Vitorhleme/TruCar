@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from datetime import date
+from app.models.notification_model import NotificationType
 
 from app import crud
 from app.api import deps
@@ -43,12 +44,11 @@ async def read_journeys(
 async def start_journey(
     *,
     db: AsyncSession = Depends(deps.get_db),
+    background_tasks: BackgroundTasks,
     journey_in: JourneyCreate,
     current_user: User = Depends(deps.get_current_active_user)
 ):
     """Inicia uma nova viagem para o utilizador logado."""
-    # --- LÓGICA DE LIMITE DE DEMO ADICIONADA ---
-    # Se o utilizador for um CLIENTE_DEMO, verificamos o limite mensal
     if current_user.role == UserRole.CLIENTE_DEMO:
         monthly_journeys = await crud.journey.count_journeys_in_current_month(
             db, organization_id=current_user.organization_id
@@ -58,7 +58,6 @@ async def start_journey(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="A sua conta de demonstração permite o registo de 10 jornadas por mês. Faça o upgrade para continuar."
             )
-    # --- FIM DA LÓGICA DE LIMITE ---
 
     existing_journey = await crud.journey.get_active_journey_by_driver(
         db, driver_id=current_user.id, organization_id=current_user.organization_id
@@ -71,15 +70,29 @@ async def start_journey(
             db, journey_in=journey_in, driver_id=current_user.id,
             organization_id=current_user.organization_id
         )
+        
+        message = f"{current_user.full_name} iniciou uma nova jornada com {journey.vehicle.brand} {journey.vehicle.model}."
+        background_tasks.add_task(
+            crud.notification.create_notification,
+            db=db,
+            message=message,
+            notification_type=NotificationType.JOURNEY_STARTED,
+            organization_id=current_user.organization_id,
+            send_to_managers=True,
+            related_entity_type="journey",
+            related_entity_id=journey.id,
+            related_vehicle_id=journey.vehicle.id
+        )
+        
         return journey
-    except VehicleNotAvailableError as e:
+    except (VehicleNotAvailableError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+
 @router.put("/{journey_id}/end", response_model=EndJourneyResponse)
 async def end_journey(
     *,
     db: AsyncSession = Depends(deps.get_db),
+    background_tasks: BackgroundTasks,
     journey_id: int,
     journey_in: JourneyUpdate,
     current_user: User = Depends(deps.get_current_active_user)
@@ -92,13 +105,28 @@ async def end_journey(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Viagem não encontrada.")
     if not journey_to_end.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta viagem já foi finalizada.")
-    if journey_to_end.driver_id != current_user.id and current_user.role != UserRole.MANAGER:
+    if journey_to_end.driver_id != current_user.id and current_user.role not in [UserRole.CLIENTE_ATIVO, UserRole.CLIENTE_DEMO]:
         raise HTTPException(status_code=403, detail="Apenas o motorista da viagem ou um gestor podem finalizá-la.")
     
     finished_journey, updated_vehicle = await crud.journey.end_journey(
         db=db, db_journey=journey_to_end, journey_in=journey_in
     )
-    return {"journey": finished_journey, "vehicle": updated_vehicle}
+
+    if updated_vehicle:
+        message = f"{current_user.full_name} finalizou a jornada com {updated_vehicle.brand} {updated_vehicle.model}."
+        background_tasks.add_task(
+            crud.notification.create_notification,
+            db=db,
+            message=message,
+            notification_type=NotificationType.JOURNEY_ENDED,
+            organization_id=current_user.organization_id,
+            send_to_managers=True,
+            related_entity_type="journey",
+            related_entity_id=finished_journey.id,
+            related_vehicle_id=updated_vehicle.id
+        )
+
+    return EndJourneyResponse(journey=finished_journey, vehicle=updated_vehicle)
 
 @router.delete("/{journey_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_journey(

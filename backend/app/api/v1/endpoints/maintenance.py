@@ -14,6 +14,7 @@ from app.schemas.maintenance_schema import (
     MaintenanceCommentPublic, MaintenanceCommentCreate
     
 )
+from app.models.notification_model import NotificationType
 
 router = APIRouter()
 
@@ -81,18 +82,32 @@ def send_new_request_email_background(manager_emails: List[str], request: Mainte
 async def create_maintenance_request(
     *,
     db: AsyncSession = Depends(deps.get_db),
+    background_tasks: BackgroundTasks,
     request_in: MaintenanceRequestCreate,
     current_user: User = Depends(deps.get_current_active_user)
 ):
-    """Cria uma nova solicitação de manutenção."""
     try:
-        new_request = await crud.maintenance.create_request(
+        request = await crud.maintenance.create_request(
             db=db, request_in=request_in, reporter_id=current_user.id, organization_id=current_user.organization_id
         )
-        # Lógica de notificação por e-mail pode ser adicionada aqui
-        return new_request
+        
+        message = f"Nova solicitação de manutenção para {request.vehicle.brand} {request.vehicle.model} aberta por {current_user.full_name}."
+        background_tasks.add_task(
+            crud.notification.create_notification,
+            db=db,
+            message=message,
+            notification_type=NotificationType.MAINTENANCE_REQUEST_NEW,
+            organization_id=current_user.organization_id,
+            send_to_managers=True,
+            related_entity_type="maintenance_request",
+            related_entity_id=request.id,
+            related_vehicle_id=request.vehicle_id
+        )
+        
+        return request
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
 
 
 @router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -128,26 +143,36 @@ async def read_maintenance_requests(
         return [req for req in requests if req.reported_by_id == current_user.id]
     return requests
 
-@router.put("/{request_id}", response_model=MaintenanceRequestPublic)
+@router.put("/{request_id}/status", response_model=MaintenanceRequestPublic)
 async def update_request_status(
     *,
     db: AsyncSession = Depends(deps.get_db),
+    background_tasks: BackgroundTasks,
     request_id: int,
     update_data: MaintenanceRequestUpdate,
     current_user: User = Depends(deps.get_current_active_manager)
 ):
-    """Atualiza o status de uma solicitação (apenas para gestores)."""
-    request = await crud.maintenance.get_request(
-        db=db, request_id=request_id, organization_id=current_user.organization_id
-    )
-    if not request:
+    db_obj = await crud.maintenance.get_request(db, request_id=request_id, organization_id=current_user.organization_id)
+    if not db_obj:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
-    
-    # A chamada à função CRUD estava correta, o problema estava no frontend
-    # Esta chamada já corresponde à assinatura da sua função em crud_maintenance.py
-    return await crud.maintenance.update_request_status(
-        db=db, db_obj=request, update_data=update_data, manager_id=current_user.id
+        
+    updated_request = await crud.maintenance.update_request_status(
+        db=db, db_obj=db_obj, update_data=update_data, manager_id=current_user.id
     )
+    
+    message = f"O status da sua solicitação de manutenção (#{updated_request.id}) foi atualizado para: {updated_request.status.value}."
+    background_tasks.add_task(
+        crud.notification.create_notification,
+        db=db,
+        message=message,
+        notification_type=NotificationType.MAINTENANCE_REQUEST_STATUS_UPDATE,
+        user_id=updated_request.reported_by_id,
+        organization_id=current_user.organization_id,
+        related_entity_type="maintenance_request",
+        related_entity_id=updated_request.id
+    )
+        
+    return updated_request
 
 
 
@@ -167,20 +192,42 @@ async def read_comments_for_request(
 
 @router.post("/{request_id}/comments", response_model=MaintenanceCommentPublic, status_code=status.HTTP_201_CREATED)
 async def create_comment_for_request(
-    request_id: int,
     *,
     db: AsyncSession = Depends(deps.get_db),
+    background_tasks: BackgroundTasks,
+    request_id: int,
     comment_in: MaintenanceCommentCreate,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.get_current_active_user)
 ):
-    """Adiciona um novo comentário a uma solicitação."""
     try:
-        return await crud.maintenance.create_comment(
-            db=db, comment_in=comment_in, request_id=request_id,
-            user_id=current_user.id, organization_id=current_user.organization_id
+        comment = await crud.maintenance.create_comment(
+            db, comment_in=comment_in, request_id=request_id, user_id=current_user.id, organization_id=current_user.organization_id
         )
+        
+        request_obj = await crud.maintenance.get_request(db, request_id=request_id, organization_id=current_user.organization_id)
+        if request_obj:
+            message = f"Novo comentário de {current_user.full_name} na solicitação de manutenção #{request_id}."
+            # Se quem comentou foi um motorista, notifica os gestores
+            if current_user.role == UserRole.DRIVER:
+                background_tasks.add_task(
+                    crud.notification.create_notification, db=db, message=message,
+                    notification_type=NotificationType.MAINTENANCE_REQUEST_NEW_COMMENT,
+                    organization_id=current_user.organization_id, send_to_managers=True,
+                    related_entity_type="maintenance_request", related_entity_id=request_id
+                )
+            # Se quem comentou foi um gestor, notifica o motorista que criou a solicitação
+            else:
+                background_tasks.add_task(
+                    crud.notification.create_notification, db=db, message=message,
+                    notification_type=NotificationType.MAINTENANCE_REQUEST_NEW_COMMENT,
+                    organization_id=current_user.organization_id, user_id=request_obj.reported_by_id,
+                    related_entity_type="maintenance_request", related_entity_id=request_id
+                )
+
+        return comment
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
 
 @router.post("/upload-file", response_model=dict)
 async def upload_attachment_file(

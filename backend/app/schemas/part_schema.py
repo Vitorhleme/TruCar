@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from app.models.inventory_transaction_model import TransactionType
 
 class PartBase(BaseModel):
     name: str
@@ -39,3 +40,9 @@ class Part(PartBase):
 
 class PartPublic(Part):
     pass
+
+class StockAdjustment(BaseModel):
+    """Schema para o corpo da requisição de ajuste de estoque."""
+    transaction_type: TransactionType
+    quantity_change: int
+    notes: Optional[str] = None

@@ -76,7 +76,6 @@ async def update_current_user_password(
     )
     return updated_user
 
-# --- NOVO ENDPOINT ADICIONADO ---
 @router.put("/me/preferences", response_model=UserPublic)
 async def update_current_user_preferences(
     *,
@@ -90,7 +89,13 @@ async def update_current_user_preferences(
     update_data = UserUpdate(**prefs_in.model_dump())
     updated_user = await crud.user.update(db=db, db_user=current_user, user_in=update_data)
     return updated_user
-# --- FIM DA ADIÇÃO ---
+
+@router.get("/me", response_model=UserPublic)
+async def read_user_me(
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """Retorna os dados do utilizador logado."""
+    return current_user
 
 @router.get("/{user_id}", response_model=UserPublic)
 async def read_user_by_id(
@@ -109,15 +114,6 @@ async def read_user_by_id(
             detail="Utilizador não encontrado.",
         )
     return user
-
-
-@router.get("/me", response_model=UserPublic)
-async def read_user_me(
-    current_user: User = Depends(deps.get_current_active_user),
-):
-    """Retorna os dados do utilizador logado."""
-    return current_user
-
 
 @router.put("/{user_id}", response_model=UserPublic)
 async def update_user(
@@ -171,17 +167,36 @@ async def delete_user(
     deleted_user = await crud.user.remove(db=db, db_user=user_to_delete)
     return deleted_user
 
-
 @router.get("/{user_id}/stats", response_model=UserStats)
 async def read_user_stats(
     user_id: int,
     db: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_manager),
+    current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Retorna as estatísticas de um utilizador específico da organização do gestor."""
+    """
+    Retorna as estatísticas de um utilizador.
+    - Gestores podem ver as estatísticas de qualquer utilizador na sua organização.
+    - Motoristas podem ver apenas as suas próprias estatísticas.
+    """
+    is_manager = current_user.role in [UserRole.CLIENTE_ATIVO, UserRole.CLIENTE_DEMO]
+    is_driver_requesting_own_stats = (current_user.role == UserRole.DRIVER and current_user.id == user_id)
+
+    if not is_manager and not is_driver_requesting_own_stats:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para ver estas estatísticas."
+        )
+
+    # Garante que o usuário solicitado pertence à mesma organização
+    target_user = await crud.user.get(db, id=user_id)
+    if not target_user or target_user.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404, detail="Utilizador não encontrado para gerar estatísticas.")
+
     stats = await crud.user.get_user_stats(
         db, user_id=user_id, organization_id=current_user.organization_id
     )
     if not stats:
+        # Esta verificação é redundante devido à anterior, mas mantida por segurança
         raise HTTPException(status_code=404, detail="Utilizador não encontrado para gerar estatísticas.")
+    
     return stats

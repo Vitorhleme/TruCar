@@ -38,11 +38,7 @@ async def get_current_user(
     except (JWTError, ValidationError):
         raise credentials_exception
     
-    # --- CORRIGIDO ---
-    # A chamada agora usa a função 'get' padronizada com o parâmetro 'id'.
-    # A função 'get' já carrega a organização, mantendo a funcionalidade.
     user = await crud.user.get(db, id=int(user_id))
-    # --- FIM DA CORREÇÃO ---
 
     if user is None:
         raise credentials_exception
@@ -62,13 +58,27 @@ async def get_current_active_manager(
     Verifica se o utilizador atual é um gestor.
     Levanta uma exceção HTTPException 403 se não for.
     """
-    # ----> ESTA VERIFICAÇÃO É ESSENCIAL <----
     if current_user.role not in [UserRole.CLIENTE_ATIVO, UserRole.CLIENTE_DEMO]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="O utilizador não tem permissões de gestor.",
         )
     return current_user
+
+async def get_current_active_driver(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """
+    Verifica se o utilizador atual é um motorista (driver).
+    Levanta uma exceção HTTPException 403 se não for.
+    """
+    if current_user.role != UserRole.DRIVER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Esta ação é restrita a motoristas.",
+        )
+    return current_user
+
 async def get_current_super_admin(
     current_user: User = Depends(get_current_active_user),
 ) -> User:
@@ -81,4 +91,3 @@ async def get_current_super_admin(
             detail="Ação restrita a administradores do sistema."
         )
     return current_user
-

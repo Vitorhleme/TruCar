@@ -5,11 +5,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 
-from app.models.fine_model import Fine, FineStatus
+from app.models.fine_model import Fine
 from app.schemas.fine_schema import FineCreate, FineUpdate
-from app.schemas.vehicle_cost_schema import VehicleCostCreate # <-- 1. IMPORTAR
-from app.models.vehicle_cost_model import CostType           # <-- 2. IMPORTAR
-from . import crud_vehicle_cost        
+from app.schemas.vehicle_cost_schema import VehicleCostCreate
+from app.models.vehicle_cost_model import CostType
+from . import crud_vehicle_cost
 
 
 async def create(db: AsyncSession, *, fine_in: FineCreate, organization_id: int) -> Fine:
@@ -62,11 +62,25 @@ async def get_multi_by_org(
     result = await db.execute(stmt)
     return result.scalars().all()
 
+# --- NOVA FUNÇÃO ADICIONADA ---
+async def get_multi_by_driver(
+    db: AsyncSession, *, driver_id: int, organization_id: int, skip: int = 0, limit: int = 100
+) -> List[Fine]:
+    """Retorna uma lista de multas de um motorista específico dentro de uma organização."""
+    stmt = (
+        select(Fine)
+        .where(Fine.organization_id == organization_id, Fine.driver_id == driver_id)
+        .order_by(Fine.date.desc())
+        .options(selectinload(Fine.vehicle), selectinload(Fine.driver))
+        .offset(skip)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()
+# --- FIM DA ADIÇÃO ---
+
 async def update(db: AsyncSession, *, db_fine: Fine, fine_in: FineUpdate) -> Fine:
     """Atualiza os dados de uma multa."""
-    # A lógica de ATUALIZAR o custo associado é mais complexa e
-    # exigiria uma coluna de ligação (ex: fine.cost_id).
-    # Por agora, a criação do custo no registro já resolve a principal necessidade.
     update_data = fine_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_fine, field, value)

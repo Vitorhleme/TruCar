@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, status, HTTPException, Response
+from fastapi import APIRouter, Depends, status, HTTPException, Response, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
-
+from app.models.notification_model import NotificationType
 from app import crud
 from app.api import deps
 from app.models.user_model import User, UserRole
@@ -15,13 +15,47 @@ router = APIRouter()
 async def create_fuel_log(
     *,
     db: AsyncSession = Depends(deps.get_db),
+    background_tasks: BackgroundTasks,
     log_in: FuelLogCreate,
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Registra um novo abastecimento para o utilizador logado."""
-    return await crud.fuel_log.create_fuel_log(
-        db=db, log_in=log_in, user_id=current_user.id, organization_id=current_user.organization_id
+    """Cria um novo registro de abastecimento e dispara alerta de consumo anormal."""
+    # Define o user_id para o usuário logado se ele for um motorista e o campo estiver vazio
+    final_user_id = current_user.id
+    if current_user.role == UserRole.DRIVER and not log_in.user_id:
+        final_user_id = current_user.id
+    elif log_in.user_id:
+        final_user_id = log_in.user_id
+
+    fuel_log = await crud.fuel_log.create_fuel_log(
+        db, log_in=log_in, user_id=final_user_id, organization_id=current_user.organization_id
     )
+
+    # --- GATILHO DE NOTIFICAÇÃO (CONSUMO ANORMAL) ---
+    vehicle = await crud.vehicle.get(db, id=fuel_log.vehicle_id, organization_id=current_user.organization_id)
+    if vehicle:
+        # Lógica para verificar o consumo (pode ser movida para um helper se ficar complexa)
+        # Esta é uma lógica simplificada. Uma real precisaria de mais dados.
+        # Por exemplo, pegar o último abastecimento para calcular a distância.
+        # Vamos assumir que você tem uma função `check_consumption` para isso.
+        is_abnormal, details = await crud.fuel_log.check_abnormal_consumption(db, fuel_log=fuel_log, vehicle=vehicle)
+        if is_abnormal:
+            background_tasks.add_task(
+                crud.notification.create_notification,
+                db=db,
+                message=details,
+                notification_type=NotificationType.ABNORMAL_FUEL_CONSUMPTION,
+                organization_id=current_user.organization_id,
+                send_to_managers=True,
+                related_entity_type="fuel_log",
+                related_entity_id=fuel_log.id,
+                related_vehicle_id=vehicle.id
+            )
+    # --- FIM DO GATILHO ---
+
+    return fuel_log
+
+
 
 @router.get("/", response_model=List[FuelLogPublic])
 async def read_fuel_logs(

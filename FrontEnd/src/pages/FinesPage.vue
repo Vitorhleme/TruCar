@@ -2,16 +2,16 @@
   <q-page padding>
     <div class="flex items-center justify-between q-mb-md">
       <div>
-        <h1 class="text-h4 text-weight-bold q-my-none">Gestão de Multas</h1>
-        <div class="text-subtitle1 text-grey-7">Registre e controle as infrações da sua frota.</div>
+        <h1 class="text-h4 text-weight-bold q-my-none">{{ pageTitle }}</h1>
+        <div class="text-subtitle1 text-grey-7">{{ pageSubtitle }}</div>
       </div>
-      <q-btn color="primary" icon="add" label="Registrar Multa" unelevated @click="openDialog()" />
+      <q-btn v-if="authStore.isManager || authStore.isDriver" color="primary" icon="add" label="Registrar Multa" unelevated @click="openDialog()" />
     </div>
 
     <q-card flat bordered>
       <q-table
         :rows="fineStore.fines"
-        :columns="columns"
+        :columns="tableColumns"
         row-key="id"
         :loading="fineStore.isLoading"
         no-data-label="Nenhuma multa registrada."
@@ -25,8 +25,8 @@
         
         <template v-slot:body-cell-actions="props">
           <q-td :props="props">
-            <q-btn flat round dense icon="edit" @click="openDialog(props.row)" />
-            <q-btn flat round dense icon="delete" color="negative" @click="confirmDelete(props.row)" />
+            <q-btn v-if="authStore.isManager" flat round dense icon="edit" @click="openDialog(props.row)" />
+            <q-btn v-if="authStore.isManager" flat round dense icon="delete" color="negative" @click="confirmDelete(props.row)" />
           </q-td>
         </template>
       </q-table>
@@ -52,7 +52,7 @@
             <q-input v-model.number="formData.value" label="Valor (R$) *" outlined type="number" prefix="R$" :rules="[val => val > 0 || 'Valor deve ser positivo']"/>
             <q-select v-model="formData.status" label="Status *" outlined :options="statusOptions" :rules="[val => !!val || 'Campo obrigatório']" />
             <q-select v-model="formData.vehicle_id" label="Veículo *" outlined :options="vehicleOptions" emit-value map-options :rules="[val => !!val || 'Campo obrigatório']" />
-            <q-select v-model="formData.driver_id" label="Motorista (Opcional)" outlined :options="driverOptions" emit-value map-options clearable />
+            <q-select v-if="authStore.isManager" v-model="formData.driver_id" label="Motorista (Opcional)" outlined :options="driverOptions" emit-value map-options clearable />
             <q-input v-model="formData.infraction_code" label="Código da Infração (Opcional)" outlined />
           </q-card-section>
           <q-card-actions align="right" class="q-pa-md">
@@ -71,6 +71,7 @@ import { useQuasar } from 'quasar';
 import { useFineStore } from 'stores/fine-store';
 import { useVehicleStore } from 'stores/vehicle-store';
 import { useUserStore } from 'stores/user-store';
+import { useAuthStore } from 'stores/auth-store';
 import type { Fine, FineCreate, FineUpdate, FineStatus } from 'src/models/fine-models';
 import type { QTableColumn } from 'quasar';
 import { format } from 'date-fns';
@@ -79,12 +80,17 @@ const $q = useQuasar();
 const fineStore = useFineStore();
 const vehicleStore = useVehicleStore();
 const userStore = useUserStore();
+const authStore = useAuthStore();
 
 const isDialogOpen = ref(false);
 const editingFine = ref<Fine | null>(null);
 const isEditing = computed(() => !!editingFine.value);
 const formData = ref<Partial<FineCreate>>({});
 const statusOptions: FineStatus[] = ["Pendente", "Paga", "Em Recurso", "Cancelada"];
+
+// Títulos dinâmicos
+const pageTitle = computed(() => authStore.isDriver ? 'Minhas Multas' : 'Gestão de Multas');
+const pageSubtitle = computed(() => authStore.isDriver ? 'Consulte suas infrações registradas.' : 'Registre e controle as infrações da sua frota.');
 
 const vehicleOptions = computed(() => vehicleStore.vehicles.map(v => ({
   label: `${v.brand} ${v.model} (${v.license_plate || v.identifier})`,
@@ -96,15 +102,30 @@ const driverOptions = computed(() => userStore.users.filter(u => u.role === 'dri
   value: d.id,
 })));
 
-const columns: QTableColumn<Fine>[] = [
+const baseColumns: QTableColumn<Fine>[] = [
   { name: 'date', label: 'Data', field: 'date', format: (val) => format(new Date(val.replace(/-/g, '/')), 'dd/MM/yyyy'), align: 'left', sortable: true },
   { name: 'description', label: 'Descrição', field: 'description', align: 'left' },
   { name: 'vehicle', label: 'Veículo', field: row => row.vehicle ? `${row.vehicle.brand} ${row.vehicle.model}` : 'N/A', align: 'left' },
-  { name: 'driver', label: 'Motorista', field: row => row.driver?.full_name || 'Não identificado', align: 'left' },
   { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true },
   { name: 'value', label: 'Valor', field: 'value', format: val => val ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00', align: 'right', sortable: true },
-  { name: 'actions', label: 'Ações', field: () => '', align: 'right' },
 ];
+
+// Colunas da tabela dinâmicas
+const tableColumns = computed<QTableColumn<Fine>[]>(() => {
+  if (authStore.isManager) {
+    const driverColumn: QTableColumn<Fine> = { name: 'driver', label: 'Motorista', field: (row: Fine) => row.driver?.full_name || 'Não identificado', align: 'left' };
+    const actionsColumn: QTableColumn<Fine> = { name: 'actions', label: 'Ações', field: () => '', align: 'right' };
+    
+    return [
+      ...baseColumns.slice(0, 3),
+      driverColumn,
+      ...baseColumns.slice(3),
+      actionsColumn,
+    ];
+  }
+  return baseColumns;
+});
+
 
 const getStatusColor = (status: FineStatus) => {
   const colorMap: Record<FineStatus, string> = { 'Pendente': 'orange', 'Paga': 'positive', 'Em Recurso': 'info', 'Cancelada': 'grey' };
@@ -112,7 +133,7 @@ const getStatusColor = (status: FineStatus) => {
 }
 
 function openDialog(fine: Fine | null = null) {
-  if (fine) {
+  if (fine && authStore.isManager) { // Apenas gestor pode editar
     editingFine.value = fine;
     formData.value = {
       description: fine.description,
@@ -125,39 +146,36 @@ function openDialog(fine: Fine | null = null) {
     };
   } else {
     editingFine.value = null;
-    formData.value = { status: "Pendente", date: format(new Date(), 'yyyy-MM-dd') };
+    formData.value = { 
+      status: "Pendente", 
+      date: format(new Date(), 'yyyy-MM-dd'),
+      driver_id: authStore.isDriver ? authStore.user?.id ?? null : null
+    };
   }
   isDialogOpen.value = true;
 }
 
-// --- FUNÇÃO handleSubmit CORRIGIDA E FINAL ---
 async function handleSubmit() {
   let success = false;
   if (isEditing.value && editingFine.value) {
-    
-    // 1. Validação dos campos obrigatórios do formulário
     if (!formData.value.description || !formData.value.date || !formData.value.value || !formData.value.status || !formData.value.vehicle_id) {
       $q.notify({ type: 'negative', message: 'Por favor, preencha todos os campos obrigatórios.' });
       return;
     }
-
-    // 2. Construção de um payload "limpo" que corresponde exatamente a FineUpdate
     const payload: FineUpdate = {
       description: formData.value.description,
       date: formData.value.date,
       value: formData.value.value,
       status: formData.value.status,
       vehicle_id: formData.value.vehicle_id,
-      // Trata campos opcionais: envia 'null' se o campo estiver vazio/nulo no formulário,
-      // ou envia o valor se estiver preenchido. Isso evita enviar 'undefined'.
       driver_id: formData.value.driver_id || null,
       infraction_code: formData.value.infraction_code || null,
     };
-
     success = await fineStore.updateFine(editingFine.value.id, payload);
-
   } else {
-    // A criação já espera o tipo correto, sem problemas aqui
+    if (authStore.isDriver) {
+      formData.value.driver_id = authStore.user?.id ?? null;
+    }
     success = await fineStore.createFine(formData.value as FineCreate);
   }
   
@@ -180,10 +198,12 @@ function confirmDelete(fine: Fine) {
 
 onMounted(() => {
   void fineStore.fetchFines();
+  
   if (vehicleStore.vehicles.length === 0) {
     void vehicleStore.fetchAllVehicles({ rowsPerPage: 9999 });
   }
-  if (userStore.users.length === 0) {
+  
+  if (authStore.isManager && userStore.users.length === 0) {
     void userStore.fetchAllUsers();
   }
 });

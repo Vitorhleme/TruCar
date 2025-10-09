@@ -1,9 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from geopy.distance import geodesic
-
 # --- Adicione esta importação ---
 from app import crud
 from app.models.fuel_log_model import FuelLog, VerificationStatus
@@ -12,6 +11,50 @@ from app.models.user_model import User
 # --- Adicione esta importação ---
 from app.schemas.vehicle_cost_schema import VehicleCostCreate
 from app.schemas.fuel_log_schema import FuelLogCreate, FuelLogUpdate, FuelProviderTransaction
+
+async def check_abnormal_consumption(db: AsyncSession, *, fuel_log: FuelLog, vehicle: Vehicle) -> tuple[bool, str]:
+    """
+    Verifica se o consumo de um abastecimento é anormal em comparação com a média do veículo.
+    Retorna (True, "mensagem de alerta") se for anormal.
+    """
+    # Para calcular o consumo, precisamos do odômetro do abastecimento anterior
+    previous_log_stmt = (
+        select(FuelLog)
+        .where(
+            FuelLog.vehicle_id == vehicle.id,
+            FuelLog.timestamp < fuel_log.timestamp
+        )
+        .order_by(FuelLog.timestamp.desc())
+        .limit(1)
+    )
+    previous_log = (await db.execute(previous_log_stmt)).scalars().first()
+    
+    if not previous_log or not previous_log.odometer:
+        return (False, "") # Não há dados suficientes para comparar
+
+    km_travelled = fuel_log.odometer - previous_log.odometer
+    # Evita divisão por zero ou valores absurdos
+    if km_travelled <= 0 or fuel_log.liters <= 0:
+        return (False, "")
+        
+    current_consumption = km_travelled / fuel_log.liters
+
+    # Calcula a média histórica de consumo para este veículo (simplificado)
+    # Uma versão mais robusta poderia filtrar por tipo de estrada, carga, etc.
+    avg_consumption_stmt = select(func.avg((FuelLog.odometer - func.lag(FuelLog.odometer, 1, FuelLog.odometer).over(order_by=FuelLog.timestamp)) / FuelLog.liters)) \
+        .where(FuelLog.vehicle_id == vehicle.id, FuelLog.id != fuel_log.id)
+    
+    historical_avg = (await db.execute(avg_consumption_stmt)).scalar_one_or_none()
+    
+    if not historical_avg or historical_avg <= 0:
+        return (False, "")
+
+    # Se o consumo atual for 25% pior (menor) que a média, gera alerta
+    if current_consumption < (historical_avg * 0.75):
+        message = f"Consumo anormal para {vehicle.brand} {vehicle.model}: {current_consumption:.2f} km/l (Média: {historical_avg:.2f} km/l)."
+        return (True, message)
+        
+    return (False, "")
 
 async def create_fuel_log(db: AsyncSession, *, log_in: FuelLogCreate, user_id: int, organization_id: int) -> FuelLog:
     """Cria um novo registo de abastecimento manual e um custo associado."""
