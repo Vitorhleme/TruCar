@@ -31,7 +31,7 @@ export function useCepApi() {
       Notify.create({
         type: 'negative',
         message: 'CEP não encontrado ou inválido.',
-        icon: 'o_wrong_location'
+        icon: 'wrong_location'
       });
       return null;
     } finally {
