@@ -64,7 +64,8 @@ app = FastAPI(
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 origins = [
-    "https://trucar-at4e.onrender.com",  # A URL do seu front-end em produção
+    "https://trucar.netlify.app",
+    "https://trucar-at4e.onrender.com",
     "http://localhost",
     "http://localhost:8080", # Porta padrão do Quasar em desenvolvimento
     "http://localhost:9000", # Outra porta comum do Quasar
