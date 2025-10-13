@@ -73,12 +73,11 @@ origins = [
 ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Esta linha permite que qualquer site acesse sua API
+    allow_origins=origins, # Usa a lista de origens permitidas
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # 6. Adicionar o evento de startup para criar as tabelas
 @app.on_event("startup")
 async def on_startup():
