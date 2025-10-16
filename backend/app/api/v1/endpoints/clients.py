@@ -11,7 +11,8 @@ from app.schemas.client_schema import ClientCreate, ClientUpdate, ClientPublic
 
 router = APIRouter()
 
-@router.post("/", response_model=ClientPublic, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ClientPublic, status_code=status.HTTP_201_CREATED,
+            dependencies=[Depends(deps.check_demo_limit("clients"))])
 async def create_client(
     *,
     db: AsyncSession = Depends(deps.get_db),

@@ -25,7 +25,8 @@ async def read_users(
     return users
 
 
-@router.post("/", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=UserPublic, status_code=status.HTTP_201_CREATED,
+            dependencies=[Depends(deps.check_demo_limit("users"))])
 async def create_user(
     *,
     db: AsyncSession = Depends(deps.get_db),
@@ -33,16 +34,6 @@ async def create_user(
     current_user: User = Depends(deps.get_current_active_manager),
 ):
     """Cria um novo utilizador (motorista) DENTRO da organização do gestor logado."""
-    if current_user.role == UserRole.CLIENTE_DEMO:
-        driver_count = await crud.user.count_by_org(
-            db, organization_id=current_user.organization_id, role=UserRole.DRIVER
-        )
-        if driver_count >= 2:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="A sua conta de demonstração permite o cadastro de apenas 2 motoristas."
-            )
-
     user = await crud.user.get_user_by_email(db, email=user_in.email)
     if user:
         raise HTTPException(

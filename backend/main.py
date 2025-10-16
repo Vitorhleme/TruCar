@@ -8,10 +8,6 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.models.vehicle_component_model import VehicleComponent
-from app.models.tire_model import VehicleTire
-from app.models.fine_model import Fine # <-- ADICIONE APENAS ESTA LINHA
-
 # Importações da sua aplicação
 from app.api.api import api_router
 from app.core.config import settings
@@ -19,9 +15,9 @@ from app.core.logging_config import setup_logging
 from app.db.session import engine
 
 # ======================= BLOCO DE IMPORTAÇÃO DOS MODELOS =======================
-# A LINHA MÁGICA: Importa a Base e todos os modelos ANTES do startup.
-# Isto garante que a Base já conheça todas as suas tabelas quando
-# a função on_startup for chamada para criá-las.
+# Este bloco garante que a Base do SQLAlchemy conheça todas as suas tabelas
+# antes que a função on_startup seja chamada para criá-las.
+
 from app.db.base_class import Base
 from app.models.organization_model import Organization
 from app.models.user_model import User
@@ -43,8 +39,12 @@ from app.models.goal_model import Goal
 from app.models.alert_model import Alert
 from app.models.vehicle_cost_model import VehicleCost
 from app.models.vehicle_component_model import VehicleComponent
-from app.models.tire_model import VehicleTire # Importa o novo modelo de pneu
+from app.models.tire_model import VehicleTire
+from app.models.fine_model import Fine
 
+# --- ESTA É A CORREÇÃO DEFINITIVA ---
+# Adiciona o nosso novo modelo à lista de modelos conhecidos.
+from app.models.demo_usage_model import DemoUsage
 # ==============================================================================
 
 
@@ -63,21 +63,22 @@ app = FastAPI(
 # 4. Criar diretórios necessários
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# 5. Configurar o CORS
 origins = [
     "https://trucar.netlify.app",
     "https://trucar-at4e.onrender.com",
     "http://localhost",
-    "http://localhost:8080", # Porta padrão do Quasar em desenvolvimento
-    "http://localhost:9000", # Outra porta comum do Quasar
-    # Adicione outras URLs se necessário
+    "http://localhost:8080",
+    "http://localhost:9000",
 ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins, # Usa a lista de origens permitidas
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 # 6. Adicionar o evento de startup para criar as tabelas
 @app.on_event("startup")
 async def on_startup():
@@ -85,14 +86,13 @@ async def on_startup():
     Cria as tabelas no banco de dados na inicialização da aplicação.
     """
     async with engine.begin() as conn:
+        # Agora, Base.metadata.create_all conhece a tabela 'organization'
+        # e a 'demousage', e as criará na ordem correta.
         await conn.run_sync(Base.metadata.create_all)
 
 # 7. Adicionar Handlers de Exceção
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """
-    Este handler intercepta os erros de validação 422 e traduz as mensagens.
-    """
     errors = exc.errors()
     custom_errors = []
     for err in errors:
@@ -110,8 +110,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # 8. Servir arquivos estáticos
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
-# 9. Endpoint de Upload (Aviso: temporário no Render)
+# 9. Endpoint de Upload
 @app.post("/upload-photo")
 async def upload_photo(file: UploadFile = File(...)):
     if not file.content_type.startswith('image/'):
@@ -136,5 +135,4 @@ def read_root():
     return {"status": f"Welcome to {settings.PROJECT_NAME} API!"}
 
 # 11. Incluir o roteador principal da API
-# Lembre-se que removemos o prefixo para funcionar corretamente no Render
 app.include_router(api_router)

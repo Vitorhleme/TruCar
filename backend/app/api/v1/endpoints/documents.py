@@ -33,11 +33,11 @@ async def save_upload_file(upload_file: UploadFile) -> str:
     return f"/static/uploads/documents/{unique_filename}"
 
 
-@router.post("/", response_model=DocumentPublic, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=DocumentPublic, status_code=status.HTTP_201_CREATED,
+            dependencies=[Depends(deps.check_demo_limit("documents"))])
 async def create_document(
     *,
     db: AsyncSession = Depends(deps.get_db),
-    # Usamos Form() para receber os dados do formulário junto com o arquivo
     document_type: DocumentType = Form(...),
     expiry_date: date = Form(...),
     notes: str = Form(None),
@@ -46,33 +46,28 @@ async def create_document(
     file: UploadFile = File(...),
     current_user: User = Depends(deps.get_current_active_user)
 ):
-    """
-    Cria um novo documento, incluindo o upload do arquivo.
-    Acessível apenas por gestores.
-    """
+    """Cria um novo documento, incluindo o upload do arquivo."""
     if current_user.role not in [UserRole.CLIENTE_ATIVO, UserRole.CLIENTE_DEMO]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Apenas gestores podem criar documentos."
         )
 
-    # Cria o objeto Pydantic com os dados do formulário
     document_in = DocumentCreate(
-        document_type=document_type,
-        expiry_date=expiry_date,
-        notes=notes,
-        vehicle_id=vehicle_id,
-        driver_id=driver_id,
+        document_type=document_type, expiry_date=expiry_date, notes=notes,
+        vehicle_id=vehicle_id, driver_id=driver_id,
     )
 
     file_url = await save_upload_file(file)
 
     created_document = await crud.document.create_with_file_url(
-        db=db,
-        obj_in=document_in,
-        organization_id=current_user.organization_id,
-        file_url=file_url
+        db=db, obj_in=document_in,
+        organization_id=current_user.organization_id, file_url=file_url
     )
+    
+    if current_user.role == UserRole.CLIENTE_DEMO:
+        await crud.demo_usage.increment_usage(db, organization_id=current_user.organization_id, resource_type="documents")
+
     return created_document
 
 

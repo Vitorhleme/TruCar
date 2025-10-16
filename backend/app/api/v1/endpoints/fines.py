@@ -11,7 +11,8 @@ from app.schemas.fine_schema import FineCreate, FineUpdate, FinePublic
 
 router = APIRouter()
 
-@router.post("/", response_model=FinePublic, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=FinePublic, status_code=status.HTTP_201_CREATED,
+            dependencies=[Depends(deps.check_demo_limit("fines"))])
 async def create_fine(
     *,
     db: AsyncSession = Depends(deps.get_db),
@@ -20,30 +21,24 @@ async def create_fine(
     current_user: User = Depends(deps.get_current_active_user)
 ):
     """Cria uma nova multa e notifica os gestores em segundo plano."""
-    if current_user.role == UserRole.DRIVER:
-        if fine_in.driver_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Você só pode registrar multas para si mesmo."
-            )
+    if current_user.role == UserRole.DRIVER and fine_in.driver_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você só pode registrar multas para si mesmo."
+        )
             
     fine = await crud.fine.create(db=db, fine_in=fine_in, organization_id=current_user.organization_id)
     
-    # --- GATILHO DE NOTIFICAÇÃO EM SEGUNDO PLANO ---
+    if current_user.role == UserRole.CLIENTE_DEMO:
+        await crud.demo_usage.increment_usage(db, organization_id=current_user.organization_id, resource_type="fines")
+
     message = f"Nova multa de R${fine.value:.2f} registrada para o veículo."
     background_tasks.add_task(
         crud.notification.create_notification,
-        db=db,
-        message=message,
-        notification_type=NotificationType.NEW_FINE_REGISTERED,
-        organization_id=current_user.organization_id,
-        send_to_managers=True,
-        related_entity_type="fine",
-        related_entity_id=fine.id,
-        related_vehicle_id=fine.vehicle_id
+        db=db, message=message, notification_type=NotificationType.NEW_FINE_REGISTERED,
+        organization_id=current_user.organization_id, send_to_managers=True,
+        related_entity_type="fine", related_entity_id=fine.id, related_vehicle_id=fine.vehicle_id
     )
-    # --- FIM DO GATILHO ---
-    
     return fine
 
 @router.get("/", response_model=List[FinePublic])

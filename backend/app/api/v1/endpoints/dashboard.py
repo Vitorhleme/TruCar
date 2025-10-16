@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Dict
 from datetime import datetime, timedelta, date
-
+from app.api.deps import DEMO_TOTAL_LIMITS, DEMO_MONTHLY_LIMITS
 from app import crud
 from app.api import deps
 from app.models.user_model import User, UserRole
@@ -15,7 +15,9 @@ from app.schemas.dashboard_schema import (
 )
 
 router = APIRouter()
-
+class DemoResourceLimit(BaseModel):
+    current: int
+    limit: int
 
 # --- FUNÇÃO HELPER PARA LIDAR COM O FILTRO DE PERÍODO ---
 def _get_start_date_from_period(period: str) -> date:
@@ -150,29 +152,50 @@ async def read_vehicle_positions(
 
 # --- Rota de estatísticas da conta demo (MANTIDA) ---
 class DemoStatsResponse(BaseModel):
-    vehicle_count: int
-    vehicle_limit: int
-    driver_count: int
-    driver_limit: int
-    journey_count: int
-    journey_limit: int
+    vehicles: DemoResourceLimit
+    users: DemoResourceLimit
+    parts: DemoResourceLimit
+    clients: DemoResourceLimit
+    reports: DemoResourceLimit
+    fines: DemoResourceLimit
+    documents: DemoResourceLimit
+    freight_orders: DemoResourceLimit
+    maintenances: DemoResourceLimit
+    fuel_logs: DemoResourceLimit
 
-@router.get("/demo-stats", response_model=DemoStatsResponse)
-async def read_demo_stats(
+@router.get("/demo-stats", response_model=DemoStatsResponse, summary="Obtém todos os limites e usos da conta demo")
+async def read_demo_stats_rebuilt(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user)
 ):
-    """Retorna as estatísticas de uso atuais para uma organização."""
-    vehicle_count = await crud.vehicle.count_by_org(db, organization_id=current_user.organization_id)
-    driver_count = await crud.user.count_by_org(db, organization_id=current_user.organization_id, role=UserRole.DRIVER)
-    journey_count = await crud.journey.count_journeys_in_current_month(db, organization_id=current_user.organization_id)
+    if current_user.role != UserRole.CLIENTE_DEMO:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Esta rota é apenas para contas de demonstração.")
 
-    return {
-        "vehicle_count": vehicle_count,
-        "vehicle_limit": 1,
-        "driver_count": driver_count,
-        "driver_limit": 2,
-        "journey_count": journey_count,
-        "journey_limit": 10
-    }
+    org_id = current_user.organization_id
+    
+    # Busca contagens totais
+    vehicle_count = await crud.vehicle.count(db, organization_id=org_id)
+    user_count = await crud.user.count(db, organization_id=org_id)
+    part_count = await crud.part.count(db, organization_id=org_id)
+    client_count = await crud.client.count(db, organization_id=org_id)
 
+    # Busca contagens mensais
+    monthly_usage: Dict[str, int] = {}
+    for resource_type in DEMO_MONTHLY_LIMITS.keys():
+        usage = await crud.demo_usage.get_or_create_usage(
+            db, organization_id=org_id, resource_type=resource_type
+        )
+        monthly_usage[resource_type] = usage.usage_count
+
+    return DemoStatsResponse(
+        vehicles=DemoResourceLimit(current=vehicle_count, limit=DEMO_TOTAL_LIMITS.get("vehicles", 0)),
+        users=DemoResourceLimit(current=user_count, limit=DEMO_TOTAL_LIMITS.get("users", 0)),
+        parts=DemoResourceLimit(current=part_count, limit=DEMO_TOTAL_LIMITS.get("parts", 0)),
+        clients=DemoResourceLimit(current=client_count, limit=DEMO_TOTAL_LIMITS.get("clients", 0)),
+        reports=DemoResourceLimit(current=monthly_usage.get("reports", 0), limit=DEMO_MONTHLY_LIMITS.get("reports", 0)),
+        fines=DemoResourceLimit(current=monthly_usage.get("fines", 0), limit=DEMO_MONTHLY_LIMITS.get("fines", 0)),
+        documents=DemoResourceLimit(current=monthly_usage.get("documents", 0), limit=DEMO_MONTHLY_LIMITS.get("documents", 0)),
+        freight_orders=DemoResourceLimit(current=monthly_usage.get("freight_orders", 0), limit=DEMO_MONTHLY_LIMITS.get("freight_orders", 0)),
+        maintenances=DemoResourceLimit(current=monthly_usage.get("maintenances", 0), limit=DEMO_MONTHLY_LIMITS.get("maintenances", 0)),
+        fuel_logs=DemoResourceLimit(current=monthly_usage.get("fuel_logs", 0), limit=DEMO_MONTHLY_LIMITS.get("fuel_logs", 0)),
+    )

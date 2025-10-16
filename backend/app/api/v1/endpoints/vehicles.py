@@ -87,24 +87,15 @@ async def read_vehicle_inventory_history(
     return history
 
 
-@router.post("/", response_model=VehiclePublic, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=VehiclePublic, status_code=status.HTTP_201_CREATED,
+            dependencies=[Depends(deps.check_demo_limit("vehicles"))])
 async def create_vehicle(
     *,
     db: AsyncSession = Depends(deps.get_db),
     vehicle_in: VehicleCreate,
     current_user: User = Depends(deps.get_current_active_manager)
 ):
-    """
-    Cria um novo veículo para a organização do gestor logado.
-    """
-    if current_user.role == UserRole.CLIENTE_DEMO:
-        vehicle_count = await crud.vehicle.count_by_org(db, organization_id=current_user.organization_id)
-        if vehicle_count >= 1:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="A sua conta de demonstração permite o cadastro de apenas 1 veículo."
-            )
-
+    """Cria um novo veículo para a organização do gestor logado."""
     try:
         vehicle = await crud.vehicle.create_with_owner(
             db=db, obj_in=vehicle_in, organization_id=current_user.organization_id

@@ -34,7 +34,8 @@ async def save_upload_file(upload_file: UploadFile, directory: Path) -> str:
     return f"/{file_path}"
 
 
-@router.post("/", response_model=PartPublic, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=PartPublic, status_code=status.HTTP_201_CREATED,
+            dependencies=[Depends(deps.check_demo_limit("parts"))])
 async def create_part(
     name: str = Form(...),
     category: str = Form(...),
@@ -52,7 +53,7 @@ async def create_part(
     invoice_file: Optional[UploadFile] = File(None),
     current_user: User = Depends(deps.get_current_active_manager)
 ):
-    """Cria uma nova peça no inventário, com valor e nota fiscal opcionais."""
+    """Cria uma nova peça no inventário."""
     part_in = PartCreate(
         name=name, category=category, stock=stock, min_stock=min_stock,
         part_number=part_number, brand=brand, location=location, notes=notes, value=value,
@@ -74,7 +75,7 @@ async def create_part(
         return part_db
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
+    
 @router.put("/{part_id}", response_model=PartPublic)
 async def update_part(
     part_id: int,

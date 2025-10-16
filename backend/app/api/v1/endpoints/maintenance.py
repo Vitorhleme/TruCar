@@ -78,7 +78,8 @@ def send_new_request_email_background(manager_emails: List[str], request: Mainte
     """
     send_email(to_emails=manager_emails, subject=subject, message_html=message_html)
 
-@router.post("/", response_model=MaintenanceRequestPublic, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=MaintenanceRequestPublic, status_code=status.HTTP_201_CREATED,
+            dependencies=[Depends(deps.check_demo_limit("maintenances"))])
 async def create_maintenance_request(
     *,
     db: AsyncSession = Depends(deps.get_db),
@@ -91,23 +92,20 @@ async def create_maintenance_request(
             db=db, request_in=request_in, reporter_id=current_user.id, organization_id=current_user.organization_id
         )
         
+        if current_user.role == UserRole.CLIENTE_DEMO:
+            await crud.demo_usage.increment_usage(db, organization_id=current_user.organization_id, resource_type="maintenances")
+        
         message = f"Nova solicitação de manutenção para {request.vehicle.brand} {request.vehicle.model} aberta por {current_user.full_name}."
         background_tasks.add_task(
             crud.notification.create_notification,
-            db=db,
-            message=message,
-            notification_type=NotificationType.MAINTENANCE_REQUEST_NEW,
-            organization_id=current_user.organization_id,
-            send_to_managers=True,
-            related_entity_type="maintenance_request",
-            related_entity_id=request.id,
+            db=db, message=message, notification_type=NotificationType.MAINTENANCE_REQUEST_NEW,
+            organization_id=current_user.organization_id, send_to_managers=True,
+            related_entity_type="maintenance_request", related_entity_id=request.id,
             related_vehicle_id=request.vehicle_id
         )
-        
         return request
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
 
 
 @router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)

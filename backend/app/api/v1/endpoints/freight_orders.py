@@ -25,12 +25,13 @@ router = APIRouter()
 # ENDPOINTS PARA GESTORES (Manager)
 # ----------------------------------------------------
 
-@router.post("/", response_model=FreightOrderPublic, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=FreightOrderPublic, status_code=status.HTTP_201_CREATED,
+            dependencies=[Depends(deps.check_demo_limit("freight_orders"))])
 async def create_freight_order(
     *,
     db: AsyncSession = Depends(deps.get_db),
     freight_order_in: FreightOrderCreate,
-    current_user: User = Depends(deps.get_current_active_manager) # Protegido
+    current_user: User = Depends(deps.get_current_active_manager)
 ):
     """(Gestor) Cria uma nova ordem de frete com suas paradas."""
     client = await crud.client.get(db=db, id=freight_order_in.client_id, organization_id=current_user.organization_id)
@@ -40,6 +41,10 @@ async def create_freight_order(
     freight_order = await crud.freight_order.create_with_stops(
         db=db, obj_in=freight_order_in, organization_id=current_user.organization_id
     )
+    
+    if current_user.role == UserRole.CLIENTE_DEMO:
+        await crud.demo_usage.increment_usage(db, organization_id=current_user.organization_id, resource_type="freight_orders")
+        
     return freight_order
 
 
