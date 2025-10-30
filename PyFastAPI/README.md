@@ -79,14 +79,6 @@ Esta seção fornece instruções sobre como configurar e executar o projeto Tru
    quasar dev
    ```
 
-### Simulador
-
-1. Abra um novo terminal e navegue até a raiz do projeto.
-2. Execute o script do simulador:
-   ```bash
-   python simulator.py
-   ```
-   O simulador começará a enviar dados de telemetria para o backend.
 
 ## Documentação da API
 
