@@ -59,19 +59,36 @@ Esta seção fornece instruções sobre como configurar e executar o projeto Tru
    ```bash
    cd PyFastAPI/backend
    ```
-2. Instale os pacotes Python necessários:
+   
+2. Crie o ambiente virtual:
+
    ```bash
-   pip install fastapi uvicorn sqlalchemy alembic pydantic python-jose passlib bcrypt
-   ```
-3. Execute as migrações do banco de dados:
-   ```bash
-   alembic upgrade head
-   ```
-4. Inicie o servidor backend:
+   python -m venv venv
+   .\venv\scripts\activate
+
    ```bash
    python -m uvicorn main:app --reload
    ```
-   O backend estará rodando em `http://127.0.0.1:8000`.
+
+3. Instale os pacotes Python necessários:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Execute as migrações do banco de dados:
+   
+   Instale PostgreSQL 17 e crie um banco de dados com o nome frota_agil.
+   
+   ```bash
+   alembic revision --autogenerate
+   alembic upgrade head
+   ```
+
+5. Rode o servidor
+
+  ```bash
+  uvicorn main:app --reload
+  ```
 
 ### Configuração do Backend (Go)
 
