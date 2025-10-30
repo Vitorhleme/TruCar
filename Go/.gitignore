@@ -1,0 +1,35 @@
+# Ficheiros de configuração de ambiente (MUITO IMPORTANTE)
+# Contém as suas chaves secretas e passwords de BD
+.env
+.env.*
+*.env
+
+# Binários e executáveis compilados
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+trucar-go
+main
+
+# Ficheiros de log
+*.log
+*.log.*
+
+# Diretório de dependências (se usar 'go mod vendor')
+/vendor/
+
+# Ficheiros de sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Ficheiros de configuração de IDEs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
