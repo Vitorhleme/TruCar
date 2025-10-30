@@ -19,20 +19,29 @@ A plataforma TruCar oferece uma ampla gama de funcionalidades para auxiliar no g
 
 ## Arquitetura
 
-O projeto TruCar é composto por três componentes principais: uma aplicação frontend, um servidor backend e um simulador de veículo.
+O projeto TruCar possui uma arquitetura flexível, consistindo em um frontend moderno e duas opções de backend para diferentes necessidades de performance e desenvolvimento.
 
 ```
-+-----------------+      +------------------+      +-----------------+
-|                 |      |                  |      |                 |
-|     Frontend    |----->|      Backend     |<-----|    Simulator    |
-| (Quasar/Vue.js) |      |    (FastAPI)     |      |    (Python)     |
-|                 |      |                  |      |                 |
-+-----------------+      +------------------+      +-----------------+
+                               +-----------------+
+                               |                 |
+                               |     Frontend    |
+                               | (Quasar/Vue.js) |
+                               |                 |
+                               +-------+---------+
+                                       |
+                  +--------------------+--------------------+
+                  |                                         |
+        +---------v---------+                       +---------v---------+
+        |                   |                       |                   |
+        |      Backend      |                       |      Backend      |
+        |   (Python/FastAPI)|                       |      (Go/Gin)     |
+        |                   |                       |                   |
+        +-------------------+                       +-------------------+
 ```
 
-- **Frontend:** Uma aplicação web que fornece a interface do usuário para a plataforma, construída com Quasar/Vue.js.
-- **Backend:** Uma aplicação em Python construída com o framework FastAPI, que expõe uma API REST para ser consumida pelo frontend e pelo simulador. É responsável pelo processamento e armazenamento de dados de telemetria, bem como por toda a lógica de negócios da plataforma.
-- **Simulador:** Um script em Python que simula um veículo real enviando dados de telemetria para a API do backend, útil para fins de teste e desenvolvimento.
+- **Frontend:** Uma aplicação web que fornece a interface do usuário para a plataforma, construída com Quasar/Vue.js, garantindo uma experiência de usuário rica e reativa.
+- **Backend (Python/FastAPI):** Uma API robusta construída com FastAPI, ideal para desenvolvimento rápido, flexibilidade e um ecossistema Python maduro. É responsável por toda a lógica de negócios e processamento de dados.
+- **Backend (Go/Gin):** Uma alternativa de alta performance ao backend Python, construída com Gin. Esta versão oferece maior velocidade e eficiência, sendo ideal para implantações em larga escala e cenários de alta concorrência.
 
 ## Como Começar
 
@@ -44,11 +53,11 @@ Esta seção fornece instruções sobre como configurar e executar o projeto Tru
 - pip
 - Node.js e npm
 
-### Configuração do Backend
+### Configuração do Backend (Python)
 
-1. Navegue até o diretório `backend`:
+1. Navegue até o diretório `PyFastAPI/backend`:
    ```bash
-   cd backend
+   cd PyFastAPI/backend
    ```
 2. Instale os pacotes Python necessários:
    ```bash
@@ -64,11 +73,27 @@ Esta seção fornece instruções sobre como configurar e executar o projeto Tru
    ```
    O backend estará rodando em `http://127.0.0.1:8000`.
 
+### Configuração do Backend (Go)
+
+1. Navegue até o diretório `Go`:
+   ```bash
+   cd Go
+   ```
+2. Baixe as dependências do projeto:
+   ```bash
+   go mod tidy
+   ```
+3. Inicie o servidor backend:
+   ```bash
+   go run cmd/main.go
+   ```
+   O backend estará rodando em `http://127.0.0.1:8080`.
+
 ### Configuração do Frontend
 
-1. Navegue até o diretório `FrontEnd`:
+1. Navegue até o diretório `PyFastAPI/FrontEnd`:
    ```bash
-   cd FrontEnd
+   cd PyFastAPI/FrontEnd
    ```
 2. Instale as dependências:
    ```bash
@@ -78,15 +103,6 @@ Esta seção fornece instruções sobre como configurar e executar o projeto Tru
    ```bash
    quasar dev
    ```
-
-### Simulador
-
-1. Abra um novo terminal e navegue até a raiz do projeto.
-2. Execute o script do simulador:
-   ```bash
-   python simulator.py
-   ```
-   O simulador começará a enviar dados de telemetria para o backend.
 
 ## Documentação da API
 
@@ -118,7 +134,7 @@ Este endpoint é usado para reportar dados de telemetria de um veículo.
 
 ## Tecnologias Utilizadas
 
-### Backend
+### Backend (Python)
 
 - **Python 3.7+**
 - **FastAPI:** Framework web para construção de APIs.
@@ -126,6 +142,13 @@ Este endpoint é usado para reportar dados de telemetria de um veículo.
 - **Alembic:** Ferramenta para migrações de banco de dados.
 - **Pydantic:** Para validação de dados.
 - **Uvicorn:** Servidor ASGI.
+
+### Backend (Go)
+
+- **Go:** Linguagem de programação de alta performance.
+- **Gin:** Framework web para construção de APIs.
+- **GORM:** ORM para interação com o banco de dados.
+- **PostgreSQL Driver:** Para comunicação com o banco de dados PostgreSQL.
 
 ### Frontend
 
@@ -140,26 +163,18 @@ Este endpoint é usado para reportar dados de telemetria de um veículo.
 
 ```
 .
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   ├── core/
-│   │   ├── db/
-│   │   ├── models/
-│   │   └── schemas/
-│   ├── static/
-│   └── tests/
-├── FrontEnd/
-│   ├── public/
-│   └── src/
-│       ├── assets/
-│       ├── components/
-│       ├── layouts/
-│       ├── pages/
-│       ├── router/
-│       └── stores/
-├── docs/
-└── simulator.py
+├── Go/
+│   ├── cmd/
+│   └── internal/
+├── PyFastAPI/
+│   ├── backend/
+│   │   ├── app/
+│   │   └── ...
+│   ├── FrontEnd/
+│   │   ├── src/
+│   │   └── ...
+│   └── docs/
+└── ...
 ```
 
 ## Contribuição
