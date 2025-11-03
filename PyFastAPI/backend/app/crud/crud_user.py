@@ -39,7 +39,6 @@ async def set_password_reset_token(db: AsyncSession, *, user: User) -> User:
     """Gera e define um token de redefinição de senha para um usuário."""
     token = create_password_reset_token(email=user.email)
     
-    # CORREÇÃO: Usando a constante importada para definir o tempo de expiração
     expire_at = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
     
     user.reset_password_token = token
@@ -73,9 +72,11 @@ async def get_users_by_role(
     limit: int = 100
 ) -> List[User]:
     stmt = select(User).where(
-        User.role == role,
+        # --- CORREÇÃO 1 DE 3 ---
+        User.role == role.value,
+        # -----------------------
         User.is_active == True,
-        User.organization_id.is_not(None) # <-- CORREÇÃO APLICADA AQUI
+        User.organization_id.is_not(None)
     ).options(selectinload(User.organization))
 
     if organization_id:
@@ -179,7 +180,9 @@ async def get_leaderboard_data(db: AsyncSession, *, organization_id: int) -> dic
         .join(Journey, User.id == Journey.driver_id)
         .where(
             User.organization_id == organization_id,
-            User.role == UserRole.DRIVER,
+            # --- CORREÇÃO 2 DE 3 ---
+            User.role == UserRole.DRIVER.value,
+            # -----------------------
             Journey.is_active == False
         )
         .group_by(User.id)
@@ -286,9 +289,19 @@ async def count_by_org(db: AsyncSession, *, organization_id: int, role: UserRole
     """Conta utilizadores numa organização, opcionalmente filtrando por papel."""
     stmt = select(func.count()).select_from(User).where(User.organization_id == organization_id)
     if role:
-        stmt = stmt.where(User.role == role)
+        # --- CORREÇÃO 3 DE 3 ---
+        # Aplicando a correção aqui também
+        stmt = stmt.where(User.role == role.value)
+        # -----------------------
     result = await db.execute(stmt)
     return result.scalar_one()
+
+# Alias 'count' mantido para compatibilidade com a rota demo-stats
+async def count(db: AsyncSession, *, organization_id: int) -> int:
+    """Implementa o método 'count' genérico para uso em APIs como demo-stats.
+    Esta função NÃO passa 'role'.
+    """
+    return await count_by_org(db, organization_id=organization_id)
 
 async def get_user_stats(db: AsyncSession, *, user_id: int, organization_id: int) -> dict | None:
     """Calcula as estatísticas de um utilizador, adaptando-as ao setor da organização."""
@@ -349,4 +362,3 @@ async def get_user_stats(db: AsyncSession, *, user_id: int, organization_id: int
         "maintenance_requests_count": maintenance_requests_count
     })
     return stats_payload
-

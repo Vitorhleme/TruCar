@@ -13,6 +13,11 @@ from app.db.session import SessionLocal
 from app.models.user_model import User, UserRole
 from app import crud
 
+# --- CORREÇÃO: Importar a INSTÂNCIA 'demo_usage' diretamente ---
+from app.crud.crud_demo_usage import demo_usage as crud_demo_usage_instance
+# -------------------------------------------------------------
+
+
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/token",
     auto_error=True
@@ -86,16 +91,21 @@ async def get_current_super_admin(
 
 DEMO_MONTHLY_LIMITS = {
     "reports": 5, "fines": 3, "documents": 10, "freight_orders": 5,
-    "maintenances": 3, "fuel_logs": 20,
+    "maintenance_requests": 5, # Renomeado de 'maintenances'
+    "fuel_logs": 20,
 }
 
 DEMO_TOTAL_LIMITS = {
     "vehicles": 3, "users": 3, "parts": 15, "clients": 5,
+    "implements": 2,          
+    "vehicle_components": 10, 
 }
 
 RESOURCE_TO_CRUD_MAP = {
     "vehicles": crud.vehicle, "users": crud.user,
     "parts": crud.part, "clients": crud.client,
+    "implements": crud.implement,          
+    "vehicle_components": crud.vehicle_component, 
 }
 
 def check_demo_limit(resource_type: str):
@@ -110,23 +120,26 @@ def check_demo_limit(resource_type: str):
 
         if resource_type in DEMO_MONTHLY_LIMITS:
             limit = DEMO_MONTHLY_LIMITS[resource_type]
-            usage = await crud.demo_usage.get_or_create_usage(
+            # --- CORREÇÃO: Usando a instância importada diretamente ---
+            usage = await crud_demo_usage_instance.get_or_create_usage(
                 db, organization_id=organization_id, resource_type=resource_type
             )
+            # -----------------------------------------------------
             if usage.usage_count >= limit:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Limite mensal de {limit} {resource_type.replace('_', ' ')} atingido para a conta demonstração.",
+                    detail=f"Limite mensal de {limit} {resource_type.replace('_', ' ')} atingido para a conta demonstração. Considere migrar para um plano pago.",
                 )
 
         if resource_type in DEMO_TOTAL_LIMITS:
             limit = DEMO_TOTAL_LIMITS[resource_type]
             crud_operation = RESOURCE_TO_CRUD_MAP.get(resource_type)
             if crud_operation:
-                current_count = await crud_operation.count(db, organization_id=organization_id)
+                # Usando .count_by_org()
+                current_count = await crud_operation.count_by_org(db, organization_id=organization_id)
                 if current_count >= limit:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail=f"Limite total de {limit} {resource_type.replace('_', ' ')} atingido para a conta demonstração.",
+                        detail=f"Limite total de {limit} {resource_type.replace('_', ' ')} atingido para a conta demonstração. Exclua itens ou migre para um plano pago.",
                     )
     return dependency

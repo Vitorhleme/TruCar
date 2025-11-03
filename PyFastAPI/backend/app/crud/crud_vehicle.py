@@ -57,6 +57,13 @@ async def count_by_org(db: AsyncSession, *, organization_id: int, search: str | 
     result = await db.execute(stmt)
     return result.scalar_one()
 
+async def count(db: AsyncSession, *, organization_id: int) -> int:
+    """Implementa o método 'count' genérico para uso em APIs como demo-stats.
+    Esta função NÃO passa 'search'.
+    """
+    # Chama count_by_org apenas com os argumentos necessários
+    return await count_by_org(db, organization_id=organization_id)
+
 async def update_vehicle_from_telemetry(db: AsyncSession, *, payload: TelemetryPayload) -> Vehicle | None:
     """Encontra um veículo pelo seu telemetry_device_id e atualiza seus dados."""
     stmt = select(Vehicle).where(Vehicle.telemetry_device_id == payload.device_id)

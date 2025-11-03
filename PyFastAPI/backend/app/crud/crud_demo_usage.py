@@ -2,7 +2,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from datetime import date
 from app.models.demo_usage_model import DemoUsage
-# CORREÇÃO: A importação agora é relativa ao diretório atual (crud)
 from app.crud.base import CRUDBase
 
 class CRUDDemoUsage(CRUDBase[DemoUsage, DemoUsage, DemoUsage]):
@@ -38,4 +37,5 @@ class CRUDDemoUsage(CRUDBase[DemoUsage, DemoUsage, DemoUsage]):
         await db.commit()
         return usage
 
+# Esta linha é a que importa. Ela cria a instância.
 demo_usage = CRUDDemoUsage(DemoUsage)

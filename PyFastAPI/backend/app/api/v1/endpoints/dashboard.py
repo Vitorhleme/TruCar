@@ -1,12 +1,18 @@
+from datetime import datetime, timedelta, date
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict
-from datetime import datetime, timedelta, date
+
 from app.api.deps import DEMO_TOTAL_LIMITS, DEMO_MONTHLY_LIMITS
 from app import crud
 from app.api import deps
 from app.models.user_model import User, UserRole
+
+# --- CORREÇÃO: Importar a INSTÂNCIA 'demo_usage' diretamente ---
+from app.crud.crud_demo_usage import demo_usage as crud_demo_usage_instance
+# -------------------------------------------------------------
+
 # --- NOVOS IMPORTS DOS SCHEMAS CENTRALIZADOS ---
 from app.schemas.dashboard_schema import (
     ManagerDashboardResponse,
@@ -160,7 +166,7 @@ class DemoStatsResponse(BaseModel):
     fines: DemoResourceLimit
     documents: DemoResourceLimit
     freight_orders: DemoResourceLimit
-    maintenances: DemoResourceLimit
+    maintenance_requests: DemoResourceLimit  # CORRIGIDO: de 'maintenances'
     fuel_logs: DemoResourceLimit
 
 @router.get("/demo-stats", response_model=DemoStatsResponse, summary="Obtém todos os limites e usos da conta demo")
@@ -173,7 +179,7 @@ async def read_demo_stats_rebuilt(
 
     org_id = current_user.organization_id
     
-    # Busca contagens totais
+    # Busca contagens totais (Usando os 'alias' .count() que adicionamos)
     vehicle_count = await crud.vehicle.count(db, organization_id=org_id)
     user_count = await crud.user.count(db, organization_id=org_id)
     part_count = await crud.part.count(db, organization_id=org_id)
@@ -182,9 +188,11 @@ async def read_demo_stats_rebuilt(
     # Busca contagens mensais
     monthly_usage: Dict[str, int] = {}
     for resource_type in DEMO_MONTHLY_LIMITS.keys():
-        usage = await crud.demo_usage.get_or_create_usage(
+        # --- CORREÇÃO: Usando a instância importada diretamente ---
+        usage = await crud_demo_usage_instance.get_or_create_usage(
             db, organization_id=org_id, resource_type=resource_type
         )
+        # -----------------------------------------------------
         monthly_usage[resource_type] = usage.usage_count
 
     return DemoStatsResponse(
@@ -196,6 +204,6 @@ async def read_demo_stats_rebuilt(
         fines=DemoResourceLimit(current=monthly_usage.get("fines", 0), limit=DEMO_MONTHLY_LIMITS.get("fines", 0)),
         documents=DemoResourceLimit(current=monthly_usage.get("documents", 0), limit=DEMO_MONTHLY_LIMITS.get("documents", 0)),
         freight_orders=DemoResourceLimit(current=monthly_usage.get("freight_orders", 0), limit=DEMO_MONTHLY_LIMITS.get("freight_orders", 0)),
-        maintenances=DemoResourceLimit(current=monthly_usage.get("maintenances", 0), limit=DEMO_MONTHLY_LIMITS.get("maintenances", 0)),
+        maintenance_requests=DemoResourceLimit(current=monthly_usage.get("maintenance_requests", 0), limit=DEMO_MONTHLY_LIMITS.get("maintenance_requests", 0)), # CORRIGIDO: chave 'maintenance_requests'
         fuel_logs=DemoResourceLimit(current=monthly_usage.get("fuel_logs", 0), limit=DEMO_MONTHLY_LIMITS.get("fuel_logs", 0)),
     )

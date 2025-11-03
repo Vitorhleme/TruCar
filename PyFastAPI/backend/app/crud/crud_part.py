@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from typing import List, Optional
 
+from app.crud.crud_user import count_by_org
 from app.models.part_model import Part
 from . import crud_inventory_transaction as crud_transaction
 from app.schemas.part_schema import PartCreate, PartUpdate
@@ -90,3 +91,8 @@ async def remove(db: AsyncSession, *, id: int, organization_id: int) -> Optional
         await db.commit()
     return db_obj
 
+async def count(db: AsyncSession, *, organization_id: int) -> int:
+    """Implementa o método 'count' genérico para uso em APIs como demo-stats."""
+    # (Opcional: se o seu count_by_org em parts/clients aceitar 'search', 
+    # esta implementação simples ainda funciona, pois 'search' é opcional)
+    return await count_by_org(db, organization_id=organization_id)
