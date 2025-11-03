@@ -17,7 +17,6 @@
       </div>
     </div>
 
-    <!-- SKELETON LOADING -->
     <div v-if="vehicleStore.isLoading && vehicleStore.vehicles.length === 0" class="row q-col-gutter-md">
       <div v-for="n in 8" :key="n" class="col-xs-12 col-sm-6 col-md-4 col-lg-3">
         <q-card flat bordered>
@@ -28,7 +27,6 @@
       </div>
     </div>
 
-    <!-- VEHICLE CARDS -->
     <div v-else-if="vehicleStore.vehicles.length > 0" class="row q-col-gutter-md">
       <div v-for="vehicle in vehicleStore.vehicles" :key="vehicle.id" class="col-xs-12 col-sm-6 col-md-4 col-lg-3">
         <q-card class="vehicle-card column no-wrap full-height" @click="goToVehicleDetails(vehicle, 'details')">
@@ -51,7 +49,6 @@
                 <q-icon v-if="vehicle.telemetry_device_id" name="sensors" color="positive" size="20px" class="q-mr-xs">
                   <q-tooltip>Telemetria Ativa</q-tooltip>
                 </q-icon>
-                <!-- NOVO BOTÃO DE CUSTOS -->
                 <q-btn @click.stop="goToVehicleDetails(vehicle, 'costs')" flat round dense icon="receipt_long">
                   <q-tooltip>Ver Custos</q-tooltip>
                 </q-btn>
@@ -87,19 +84,16 @@
       </div>
     </div>
 
-    <!-- EMPTY STATE -->
     <div v-else class="full-width row flex-center text-primary q-gutter-sm q-pa-xl">
       <q-icon name="add_circle_outline" size="3em" />
       <span class="text-h6">Nenhum {{ terminologyStore.vehicleNoun.toLowerCase() }} encontrado</span>
       <q-btn @click="openCreateDialog" v-if="authStore.isManager" unelevated color="primary" :label="`Adicionar primeiro ${terminologyStore.vehicleNoun.toLowerCase()}`" class="q-ml-lg" />
     </div>
 
-    <!-- PAGINATION -->
     <div class="flex flex-center q-mt-lg" v-if="pagination.rowsNumber > pagination.rowsPerPage">
       <q-pagination v-model="pagination.page" :max="Math.ceil(pagination.rowsNumber / pagination.rowsPerPage)" @update:model-value="onPageChange" direction-links boundary-links icon-first="skip_previous" icon-last="skip_next" icon-prev="fast_rewind" icon-next="fast_forward" />
     </div>
 
-    <!-- FORM DIALOG -->
     <q-dialog v-model="isFormDialogOpen">
         <q-card style="width: 500px; max-width: 90vw;" :dark="$q.dark.isActive">
           <q-card-section>
@@ -154,6 +148,7 @@ import { useQuasar } from 'quasar';
 import { useVehicleStore } from 'stores/vehicle-store';
 import { useAuthStore } from 'stores/auth-store';
 import { useTerminologyStore } from 'stores/terminology-store';
+import { useDemoStore } from 'stores/demo-store';
 import { VehicleStatus, type Vehicle, type VehicleCreate, type VehicleUpdate } from 'src/models/vehicle-models';
 import api from 'src/services/api';
 import axios from 'axios';
@@ -163,7 +158,7 @@ const vehicleStore = useVehicleStore();
 const authStore = useAuthStore();
 const terminologyStore = useTerminologyStore();
 const router = useRouter();
-
+const demoStore = useDemoStore();
 const isFormDialogOpen = ref(false);
 const isSubmitting = ref(false);
 const editingVehicleId = ref<number | null>(null);
@@ -171,6 +166,31 @@ const isEditing = computed(() => editingVehicleId.value !== null);
 const statusOptions = Object.values(VehicleStatus);
 const formData = ref<Partial<Vehicle>>({});
 const photoFile = ref<File | null>(null);
+
+// --- LÓGICA DE BLOQUEIO DE DEMO ADICIONADA ---
+const isVehicleLimitReached = computed(() => {
+  if (!authStore.isDemo) {
+    return false;
+  }
+  const limit = authStore.user?.organization?.vehicle_limit;
+  if (limit === undefined || limit === null || limit < 0) {
+    return false;
+  }
+  // Usar a contagem global da demoStore, não a contagem local da vehicleStore
+  const currentCount = demoStore.stats?.vehicle_count ?? 0;
+  return currentCount >= limit;
+});
+
+function showUpgradeDialog() {
+  $q.dialog({
+    title: 'Limite do Plano Demo Atingido',
+    message: `Você atingiu o limite de ${authStore.user?.organization?.vehicle_limit} ${terminologyStore.vehicleNounPlural.toLowerCase()} permitidos no plano de demonstração. Para adicionar mais, por favor, entre em contato com nossa equipe comercial para atualizar seu plano.`,
+    ok: { label: 'Entendido', color: 'primary', unelevated: true },
+    persistent: false
+  });
+}
+// --- FIM DA LÓGICA DE BLOQUEIO ---
+
 
 function goToVehicleDetails(vehicle: Vehicle, tab = 'details') {
   void router.push({ 
@@ -193,6 +213,13 @@ function resetForm() {
 }
 
 function openCreateDialog() {
+  // --- VERIFICAÇÃO DE LIMITE ADICIONADA ---
+  if (isVehicleLimitReached.value) {
+    showUpgradeDialog();
+    return; // Impede a abertura do diálogo
+  }
+  // --- FIM DA VERIFICAÇÃO ---
+  
   resetForm();
   isFormDialogOpen.value = true;
 }
@@ -251,6 +278,9 @@ async function onFormSubmit() {
       await vehicleStore.updateVehicle(editingVehicleId.value, payload as VehicleUpdate, currentFetchParams);
     } else {
       await vehicleStore.addNewVehicle(payload as VehicleCreate, currentFetchParams);
+      if (authStore.isDemo) {
+        void demoStore.fetchDemoStats();
+      }
     }
 
     isFormDialogOpen.value = false;
@@ -285,6 +315,9 @@ watch(searchTerm, () => {
 
 onMounted(() => {
   void fetchFromServer(pagination.value.page, pagination.value.rowsPerPage, searchTerm.value);
+  if (authStore.isDemo) {
+    void demoStore.fetchDemoStats();
+  }
 });
 
 function formatDistance(value: number | null | undefined, unit: 'km' | 'Horas'): string {

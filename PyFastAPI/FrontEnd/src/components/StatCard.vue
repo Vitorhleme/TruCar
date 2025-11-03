@@ -10,7 +10,7 @@
       <q-icon :name="icon" :color="color" size="44px" class="q-mr-md" />
       <div>
         <div class="text-grey-8">{{ label }}</div>
-        <div v-if="!loading" class="text-h4 text-weight-bolder">{{ value }}</div>
+        <div v-if="!loading" class="text-h4 text-weight-bolder">{{ formattedValue }}</div>
         <q-skeleton v-else type="text" width="50px" class="text-h4" />
       </div>
     </q-card-section>
@@ -18,6 +18,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'; // ADICIONADO
 import { useRouter } from 'vue-router';
 
 const props = defineProps<{
@@ -26,10 +27,24 @@ const props = defineProps<{
   icon: string;
   color: string;
   loading: boolean;
-  to?: string; // <-- Propriedade opcional para o link
+  to?: string;
+  // --- NOVA PROP ADICIONADA ---
+  limit?: number; // Opcional. Se não for passado ou for < 0, será "Ilimitado"
+  // --- FIM DA ADIÇÃO ---
 }>();
 
 const router = useRouter();
+
+// --- NOVA LÓGICA ADICIONADA ---
+const formattedValue = computed(() => {
+  // Se o limite não for fornecido ou for -1 (Ilimitado), mostre apenas o valor
+  if (props.limit === undefined || props.limit < 0) {
+    return props.value;
+  }
+  // Caso contrário, mostre "valor / limite"
+  return `${props.value} / ${props.limit}`;
+});
+// --- FIM DA ADIÇÃO ---
 
 function handleClick() {
   if (props.to) {

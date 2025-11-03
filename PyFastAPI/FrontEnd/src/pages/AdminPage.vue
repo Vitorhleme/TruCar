@@ -122,7 +122,35 @@
           <q-card-section class="q-gutter-y-md">
             <q-input outlined v-model="editOrgForm.name" label="Nome da Empresa *" :rules="[val => !!val || 'Campo obrigatório']" />
             <q-select outlined v-model="editOrgForm.sector" :options="sectorOptions" label="Setor *" emit-value map-options />
-          </q-card-section>
+            
+            <q-separator class="q-mt-md" />
+            <div class="text-subtitle2 q-mb-none">Definir Limites (-1 para Ilimitado)</div>
+            
+            <q-input
+              outlined
+              v-model.number="editOrgForm.vehicle_limit"
+              type="number"
+              label="Limite de Veículos"
+            />
+            <q-input
+              outlined
+              v-model.number="editOrgForm.driver_limit"
+              type="number"
+              label="Limite de Motoristas"
+            />
+            <q-input
+              outlined
+              v-model.number="editOrgForm.freight_order_limit"
+              type="number"
+              label="Limite de Ordens de Frete"
+            />
+            <q-input
+              outlined
+              v-model.number="editOrgForm.maintenance_limit"
+              type="number"
+              label="Limite de Manutenções"
+            />
+            </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Cancelar" v-close-popup />
             <q-btn type="submit" unelevated color="primary" label="Salvar Alterações" :loading="isSubmitting" />
@@ -139,7 +167,8 @@ import { ref, watch } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import { useAdminStore } from 'stores/admin-store';
 import type { User, UserSector } from 'src/models/auth-models';
-import type { Organization, OrganizationUpdate } from 'src/models/organization-models';
+// Verifique se este arquivo foi atualizado conforme minha resposta anterior
+import type { Organization, OrganizationUpdate } from 'src/models/organization-models'; 
 
 const $q = useQuasar();
 const adminStore = useAdminStore();
@@ -160,7 +189,8 @@ const sectorOptions: { label: string, value: UserSector }[] = [
 const userColumns: QTableColumn[] = [
   { name: 'full_name', label: 'Nome do Utilizador', field: 'full_name', align: 'left', sortable: true },
   { name: 'email', label: 'E-mail', field: 'email', align: 'left', sortable: true },
-  { name: 'organization', label: 'Empresa', field: (row: User) => row.organization.name, align: 'left', sortable: true },
+  // --- CORRIGIDO AQUI ---
+  { name: 'organization', label: 'Empresa', field: (row: User) => row.organization?.name, align: 'left', sortable: true },
   { name: 'actions', label: 'Ações', field: 'actions', align: 'right' },
 ];
 
@@ -176,7 +206,8 @@ const allUsersColumns: QTableColumn[] = [
   { name: 'full_name', label: 'Nome', field: 'full_name', align: 'left', sortable: true },
   { name: 'email', label: 'E-mail', field: 'email', align: 'left', sortable: true },
   { name: 'role', label: 'Papel', field: 'role', align: 'center', sortable: true },
-  { name: 'organization', label: 'Empresa', field: (row: User) => row.organization.name, align: 'left', sortable: true },
+  // --- CORRIGIDO AQUI ---
+  { name: 'organization', label: 'Empresa', field: (row: User) => row.organization?.name, align: 'left', sortable: true },
   { name: 'actions', label: 'Ações', field: 'actions', align: 'center' },
 ];
 // --- FIM DA ADIÇÃO ---
@@ -184,7 +215,8 @@ const allUsersColumns: QTableColumn[] = [
 function promptToActivate(user: User) {
   $q.dialog({
     title: 'Confirmar Ativação',
-    message: `Tem a certeza que deseja ativar a conta de <strong>${user.full_name}</strong> (${user.organization.name})? O papel dele será alterado para CLIENTE_ATIVO.`,
+    // --- CORRIGIDO AQUI ---
+    message: `Tem a certeza que deseja ativar a conta de <strong>${user.full_name}</strong> (${user.organization?.name ?? 'Empresa não definida'})? O papel dele será alterado para CLIENTE_ATIVO.`,
     html: true,
     cancel: { label: 'Cancelar', flat: true },
     ok: { label: 'Sim, Ativar', color: 'positive', unelevated: true },
@@ -209,7 +241,16 @@ function promptToImpersonate(user: User) {
 
 function openEditDialog(org: Organization) {
   editingOrg.value = org;
-  editOrgForm.value = { name: org.name, sector: org.sector };
+  // --- MODIFICADO: Preencher o formulário com os novos limites ---
+  editOrgForm.value = { 
+    name: org.name, 
+    sector: org.sector,
+    vehicle_limit: org.vehicle_limit,
+    driver_limit: org.driver_limit,
+    freight_order_limit: org.freight_order_limit,
+    maintenance_limit: org.maintenance_limit
+  };
+  // --- FIM DA MODIFICAÇÃO ---
   isEditDialogOpen.value = true;
 }
 
@@ -217,6 +258,7 @@ async function handleEditOrg() {
   if (!editingOrg.value) return;
   isSubmitting.value = true;
   try {
+    // A store 'updateOrganization' já deve enviar o 'editOrgForm.value' completo
     await adminStore.updateOrganization(editingOrg.value.id, editOrgForm.value);
     isEditDialogOpen.value = false;
   } finally {

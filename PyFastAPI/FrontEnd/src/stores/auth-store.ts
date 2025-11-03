@@ -165,7 +165,11 @@ export const useAuthStore = defineStore('auth', () => {
   function _setSession(token: string, userData: User) {
     accessToken.value = token;
     user.value = userData;
-    useTerminologyStore().setSector(userData.organization.sector);
+    // --- CORRIGIDO AQUI ---
+    if (userData.organization) {
+      useTerminologyStore().setSector(userData.organization.sector);
+    }
+    // --- FIM DA CORREÇÃO ---
     localStorage.setItem('accessToken', token);
     localStorage.setItem('user', JSON.stringify(userData));
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;

@@ -9,7 +9,10 @@ class OrganizationNestedInUser(BaseModel):
     id: int
     name: str
     sector: Sector
-
+    vehicle_limit: int
+    driver_limit: int
+    freight_order_limit: int
+    maintenance_limit: int
     model_config = { "from_attributes": True }
 
 class UserBase(BaseModel):

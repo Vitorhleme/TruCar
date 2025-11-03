@@ -22,7 +22,7 @@
         </template>
         <template v-slot:body-cell-actions="props">
           <q-td :props="props">
-             <q-btn @click.stop="openEditDialog(props.row)" flat round dense icon="edit" class="q-mr-sm" />
+              <q-btn @click.stop="openEditDialog(props.row)" flat round dense icon="edit" class="q-mr-sm" />
             <q-btn @click.stop="promptToDelete(props.row)" flat round dense icon="delete" color="negative" />
           </q-td>
         </template>
@@ -40,7 +40,6 @@
             <q-input outlined v-model="formData.full_name" label="Nome Completo *" :rules="[val => !!val || 'Campo obrigatório']" />
             <q-input outlined v-model="formData.email" type="email" label="E-mail *" :rules="[val => !!val || 'Campo obrigatório']" />
             
-            <!-- CAMPO EMPLOYEE_ID ADICIONADO AO FORMULÁRIO -->
             <q-input outlined v-model="formData.employee_id" label="ID de Funcionário" hint="Ex: TRC-a1b2c3d4" />
             
             <q-input outlined v-model="formData.avatar_url" label="URL da Foto do Perfil" />
@@ -79,12 +78,13 @@ import { ref, onMounted, computed } from 'vue';
 import { useQuasar, type QTableColumn } from 'quasar';
 import { useUserStore } from 'stores/user-store';
 import { useAuthStore } from 'stores/auth-store';
+import { useDemoStore } from 'stores/demo-store';
 import { useRouter } from 'vue-router';
 import { isAxiosError } from 'axios';
 import type { User } from 'src/models/auth-models';
 import type { UserCreate, UserUpdate } from 'src/models/user-models';
 
-
+const demoStore = useDemoStore();
 const $q = useQuasar();
 const userStore = useUserStore();
 const authStore = useAuthStore();
@@ -107,6 +107,30 @@ const isRoleSelectorDisabled = computed(() => {
   return !authStore.isSuperuser;
 });
 
+// --- LÓGICA DE BLOQUEIO DE DEMO ADICIONADA ---
+const isDriverLimitReached = computed(() => {
+  if (!authStore.isDemo) {
+    return false;
+  }
+  const limit = authStore.user?.organization?.driver_limit;
+  if (limit === undefined || limit === null || limit < 0) {
+    return false;
+  }
+  // Usar a contagem global da demoStore
+  const currentCount = demoStore.stats?.driver_count ?? 0;
+  return currentCount >= limit;
+});
+
+function showUpgradeDialog() {
+  $q.dialog({
+    title: 'Limite do Plano Demo Atingido',
+    message: `Você atingiu o limite de ${authStore.user?.organization?.driver_limit} motoristas permitidos no plano de demonstração. Para adicionar mais, por favor, entre em contato com nossa equipe comercial para atualizar seu plano.`,
+    ok: { label: 'Entendido', color: 'primary', unelevated: true },
+    persistent: false
+  });
+}
+// --- FIM DA LÓGICA DE BLOQUEIO ---
+
 const columns: QTableColumn[] = [
   // --- COLUNA EMPLOYEE_ID ADICIONADA À TABELA ---
   { name: 'employee_id', label: 'ID Funcionário', field: 'employee_id', align: 'left', sortable: true },
@@ -128,6 +152,15 @@ function resetForm() {
 }
 
 function openCreateDialog() {
+  // --- VERIFICAÇÃO DE LIMITE ADICIONADA ---
+  // A verificação só se aplica se o usuário que está sendo criado for 'driver'
+  // Vamos verificar ao tentar criar um 'driver' (que é o padrão)
+  if (isDriverLimitReached.value && formData.value.role === 'driver') {
+    showUpgradeDialog();
+    return; // Impede a abertura do diálogo
+  }
+  // --- FIM DA VERIFICAÇÃO ---
+
   resetForm();
   isFormDialogOpen.value = true;
 }
@@ -147,6 +180,19 @@ async function onFormSubmit() {
   isSubmitting.value = true;
   try {
     const payload = { ...formData.value };
+
+    // --- VERIFICAÇÃO DE LIMITE AO SALVAR (CASO O PAPEL SEJA MUDADO PARA DRIVER) ---
+    if (
+      !isEditing.value && // Apenas ao criar um novo usuário
+      payload.role === 'driver' && // que é motorista
+      isDriverLimitReached.value // e o limite foi atingido
+    ) {
+      showUpgradeDialog();
+      isSubmitting.value = false;
+      return;
+    }
+    // --- FIM DA VERIFICAÇÃO ---
+
     if (isEditing.value && !payload.password) {
       delete payload.password;
     }
@@ -155,6 +201,9 @@ async function onFormSubmit() {
       await userStore.updateUser(editingUserId.value, payload as UserUpdate);
     } else {
       await userStore.addNewUser(payload as UserCreate);
+      if (authStore.isDemo) {
+        void demoStore.fetchDemoStats();
+      }
     }
     isFormDialogOpen.value = false;
     $q.notify({ type: 'positive', message: 'Usuário salvo com sucesso!' });
@@ -183,5 +232,8 @@ function promptToDelete(user: User) {
 
 onMounted(async () => {
   await userStore.fetchAllUsers();
+  if (authStore.isDemo) {
+    void demoStore.fetchDemoStats();
+  }
 });
 </script>

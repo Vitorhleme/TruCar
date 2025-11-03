@@ -13,6 +13,18 @@ export interface Organization {
   sector: UserSector;
 }
 
+export interface OrganizationNestedInUser {
+  id: number;
+  name: string;
+  sector: UserSector;
+  // --- CAMPOS DE LIMITE ADICIONADOS ---
+  vehicle_limit: number;
+  driver_limit: number;
+  freight_order_limit: number;
+  maintenance_limit: number;
+  // --- FIM DA ADIÇÃO ---
+}
+
 export interface User {
   id: number;
   full_name: string;
@@ -20,12 +32,12 @@ export interface User {
   employee_id: string;
   role: UserRole;
   is_active: boolean;
+  is_superuser: boolean;
   avatar_url: string | null;
   notify_in_app: boolean;
   notify_by_email: boolean;
   notification_email: string | null;
-  organization: Organization;
-  is_superuser?: boolean;
+  organization: OrganizationNestedInUser | null; // <-- Esta linha usa a interface que acabamos de corrigir
 }
 
 export interface TokenData {

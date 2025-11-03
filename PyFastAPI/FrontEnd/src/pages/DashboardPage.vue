@@ -2,11 +2,7 @@
   <q-page padding class="dashboard-page">
     <div class="page-content-container">
 
-      <!-- ======================================================= -->
-      <!-- DASHBOARD DO GESTOR (CLIENTE_ATIVO / CLIENTE_DEMO)      -->
-      <!-- ======================================================= -->
       <template v-if="isManager">
-        <!-- CABEÇALHO E FILTROS GLOBAIS -->
         <div class="flex items-center justify-between q-mb-md">
           <div>
             <h1 class="text-h4 text-weight-bold q-my-none">Dashboard de Gestão</h1>
@@ -33,10 +29,17 @@
           </div>
         </div>
 
-        <!-- KPIS DE STATUS E EFICIÊNCIA -->
-      <div class="row q-col-gutter-lg q-mb-lg">
+        <div class="row q-col-gutter-lg q-mb-lg">
     <div class="col-12 col-sm-6 col-lg-3">
-        <StatCard label="Total de Veículos" :value="kpis?.total_vehicles ?? 0" icon="local_shipping" color="primary" :loading="dashboardStore.isLoading" to="/vehicles"/>
+        <StatCard
+          label="Total de Veículos"
+          :value="kpis?.total_vehicles ?? 0"
+          :limit="authStore.user?.organization?.vehicle_limit ?? -1"
+          icon="local_shipping"
+          color="primary"
+          :loading="dashboardStore.isLoading"
+          to="/vehicles"
+        />
     </div>
     <div class="col-12 col-sm-6 col-lg-3">
         <StatCard label="Disponíveis" :value="kpis?.available_vehicles ?? 0" icon="check_circle_outline" color="positive" :loading="dashboardStore.isLoading" to="/vehicles?status=available"/>
@@ -45,7 +48,14 @@
         <StatCard :label="journeyNounInProgress" :value="kpis?.in_use_vehicles ?? 0" icon="alt_route" color="warning" :loading="dashboardStore.isLoading" to="/vehicles?status=in_use"/>
     </div>
     <div class="col-12 col-sm-6 col-lg-3">
-        <StatCard label="Em Manutenção" :value="kpis?.maintenance_vehicles ?? 0" icon="build" color="negative" :loading="dashboardStore.isLoading" to="/maintenance"/>
+        <StatCard
+          label="Em Manutenção"
+          :value="kpis?.maintenance_vehicles ?? 0"
+          icon="build"
+          color="negative"
+          :loading="dashboardStore.isLoading"
+          to="/maintenance"
+        />
     </div>
     <div class="col-12 col-sm-6 col-lg-3">
         <StatCard label="Custo por KM" :value="`R$ ${efficiencyKpis?.cost_per_km.toFixed(2) ?? '0.00'}`" icon="paid" color="deep-purple" :loading="dashboardStore.isLoading"/>
@@ -57,12 +67,9 @@
         <StatCard label="Taxa de Utilização" :value="`${efficiencyKpis?.utilization_rate.toFixed(1) ?? '0.0'}%`" icon="pie_chart" color="teal" :loading="dashboardStore.isLoading"/>
     </div>
 </div>
-        <!-- LAYOUT PRINCIPAL DO DASHBOARD (MAPA, GRÁFICOS E WIDGETS DE AÇÃO) -->
         <div class="row q-col-gutter-lg" v-if="dashboardStore.managerDashboard">
-          <!-- Coluna Esquerda (Mais larga) -->
           <div class="col-12 col-lg-8">
             <div class="column q-gutter-y-lg">
-              <!-- WIDGET DE MAPA EM TEMPO REAL -->
               <q-card class="dashboard-card">
                 <q-card-section>
                   <div class="text-h6">Operação em Tempo Real</div>
@@ -93,8 +100,7 @@
                 </q-card-section>
               </q-card>
 
-              <!-- GRÁFICOS DE ANÁLISE (Premium) - AGORA LADO A LADO -->
-               <div></div>
+              <div></div>
               <div class="row q-col-gutter-lg">
                 <div class="col-12 col-md-6">
                   <PremiumWidget title="Análise de Custos" :icon="`insights`" :description="`Análise de custos do período de ${selectedPeriod.label}`">
@@ -110,10 +116,8 @@
             </div>
           </div>
 
-          <!-- Coluna Direita (Mais estreita) -->
           <div class="col-12 col-lg-4">
-             <div class="column q-gutter-y-lg">
-              <!-- WIDGET DE ALERTAS RECENTES -->
+              <div class="column q-gutter-y-lg">
               <q-card class="dashboard-card">
                 <q-card-section>
                   <div class="text-h6">Alertas Recentes</div>
@@ -131,19 +135,18 @@
                       <q-item-label caption>{{ alert.time }}</q-item-label>
                     </q-item-section>
                   </q-item>
-                   <q-item v-if="!recentAlerts?.length">
+                    <q-item v-if="!recentAlerts?.length">
                     <q-item-section class="text-center text-grey-6">Nenhum alerta recente.</q-item-section>
                   </q-item>
                 </q-list>
               </q-card>
 
-              <!-- WIDGET DE PRÓXIMAS MANUTENÇÕES -->
               <q-card class="dashboard-card">
                 <q-card-section>
                   <div class="text-h6">Próximas Manutenções</div>
                 </q-card-section>
                 <q-list separator>
-                   <q-item v-for="maint in upcomingMaintenances" :key="maint.vehicle_info">
+                    <q-item v-for="maint in upcomingMaintenances" :key="maint.vehicle_info">
                     <q-item-section>
                       <q-item-label>{{ maint.vehicle_info }}</q-item-label>
                       <q-item-label caption>Vence em {{ maint.due_date ? new Date(maint.due_date).toLocaleDateString() : `${maint.due_km} km` }}</q-item-label>
@@ -160,26 +163,24 @@
                 </q-list>
               </q-card>
               
-              <!-- WIDGET DE METAS -->
               <q-card class="dashboard-card" v-if="activeGoal">
-                 <q-card-section>
-                   <div class="text-h6">Meta do Mês: {{ activeGoal.title }}</div>
-                   <div class="text-subtitle2 text-grey-7">Progresso: {{ activeGoal.current_value.toFixed(2) }} / {{ activeGoal.target_value }} ({{ activeGoal.unit }})</div>
-                 </q-card-section>
-                 <q-card-section>
+                  <q-card-section>
+                    <div class="text-h6">Meta do Mês: {{ activeGoal.title }}</div>
+                    <div class="text-subtitle2 text-grey-7">Progresso: {{ activeGoal.current_value.toFixed(2) }} / {{ activeGoal.target_value }} ({{ activeGoal.unit }})</div>
+                  </q-card-section>
+                  <q-card-section>
                     <q-linear-progress size="25px" :value="goalProgress" color="positive" class="q-mt-sm">
                       <div class="absolute-full flex flex-center">
                         <q-badge color="white" text-color="black" :label="`${(goalProgress * 100).toFixed(1)}%`" />
                       </div>
                     </q-linear-progress>
-                 </q-card-section>
+                  </q-card-section>
               </q-card>
 
-              <!-- PÓDIO DE MOTORISTAS (Premium) -->
               <PremiumWidget title="Top 3 Motoristas do Mês" icon="emoji_events" description="Reconheça os seus motoristas com melhor performance.">
                 <div class="row items-end justify-center q-pa-md" style="min-height: 252px;">
                   <PodiumDriverCard v-for="(driver, index) in podiumDrivers" :key="driver.full_name" :driver="driver" :rank="index + 1" :unit="terminologyStore.distanceUnit" />
-                   <div v-if="!podiumDrivers?.length" class="text-grey-6">Dados insuficientes para gerar o pódio.</div>
+                    <div v-if="!podiumDrivers?.length" class="text-grey-6">Dados insuficientes para gerar o pódio.</div>
                 </div>
               </PremiumWidget>
             </div>
@@ -187,21 +188,15 @@
         </div>
       </template>
 
-      <!-- ======================================================= -->
-      <!-- DASHBOARD DO MOTORISTA (DRIVER)                         -->
-      <!-- ======================================================= -->
       <template v-else-if="isDriver">
-        <!-- CABEÇALHO DO MOTORISTA -->
         <div>
           <h1 class="text-h4 text-weight-bold q-my-none">Meu Desempenho</h1>
           <div class="text-subtitle1 text-grey-7">Olá, {{ authStore.user?.full_name }}. Aqui está seu resumo.</div>
         </div>
 
         <div class="row q-col-gutter-lg q-mt-sm" v-if="dashboardStore.driverDashboard">
-          <!-- Coluna Esquerda -->
           <div class="col-12 col-md-7">
             <div class="column q-gutter-y-lg">
-              <!-- MINHAS MÉTRICAS -->
               <q-card class="dashboard-card">
                 <q-card-section>
                   <div class="text-h6">Minhas Métricas (Este Mês)</div>
@@ -214,8 +209,7 @@
                 </q-card-section>
               </q-card>
 
-              <!-- MINHA POSIÇÃO NO RANKING -->
-               <q-card class="dashboard-card">
+              <q-card class="dashboard-card">
                 <q-card-section>
                   <div class="text-h6">Minha Posição no Ranking</div>
                 </q-card-section>
@@ -225,17 +219,15 @@
                       <q-item-section>
                         <q-item-label>{{ entry.name }}</q-item-label>
                       </q-item-section>
-                       <q-item-section side class="text-weight-bold">{{ entry.metric.toFixed(0) }} {{ terminologyStore.distanceUnit }}</q-item-section>
+                        <q-item-section side class="text-weight-bold">{{ entry.metric.toFixed(0) }} {{ terminologyStore.distanceUnit }}</q-item-section>
                     </q-item>
                 </q-list>
               </q-card>
             </div>
           </div>
 
-          <!-- Coluna Direita -->
           <div class="col-12 col-md-5">
-             <div class="column q-gutter-y-lg">
-                <!-- MINHAS CONQUISTAS -->
+              <div class="column q-gutter-y-lg">
                 <q-card class="dashboard-card">
                   <q-card-section>
                     <div class="text-h6">Minhas Conquistas</div>
@@ -248,9 +240,8 @@
                   </q-card-section>
                 </q-card>
 
-                <!-- PRÓXIMAS JORNADAS -->
                 <q-card class="dashboard-card">
-                   <q-card-section>
+                    <q-card-section>
                     <div class="text-h6">Minhas Próximas Jornadas</div>
                   </q-card-section>
                   <q-list separator>
@@ -259,13 +250,12 @@
                     </q-item>
                   </q-list>
                 </q-card>
-             </div>
+              </div>
           </div>
         </div>
       </template>
 
-       <!-- ESTADO DE LOADING INICIAL -->
-      <template v-else-if="dashboardStore.isLoading">
+        <template v-else-if="dashboardStore.isLoading">
         <div class="flex flex-center" style="height: 80vh">
           <q-spinner-dots color="primary" size="4em"/>
         </div>
@@ -302,15 +292,15 @@ import {
 
 // --- LÓGICA DOS ÍCONES DO MAPA ---
 /**
- * Gera um ícone de pino de mapa em SVG como uma data URI,
- * contendo um ícone do Material Design no centro.
- * @param pinColor Cor de fundo do pino (ex: '#21BA45').
- * @param iconPath String do path SVG para o ícone interno.
- * @returns Uma string de data URI para ser usada em `iconUrl`.
- */
+  * Gera um ícone de pino de mapa em SVG como uma data URI,
+  * contendo um ícone do Material Design no centro.
+  * @param pinColor Cor de fundo do pino (ex: '#21BA45').
+  * @param iconPath String do path SVG para o ícone interno.
+  * @returns Uma string de data URI para ser usada em `iconUrl`.
+  */
 function createQuasarIconPin(pinColor: string, iconPath: string): string {
   const svg = `
-    <svg xmlns="http://www.w.org/2000/svg" viewBox="0 0 32 42" width="38" height="48">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 42" width="38" height="48">
       <path fill="${pinColor}" stroke="#fff" stroke-width="1.5"
         d="M16 2C9.925 2 5 6.925 5 13c0 7.75 11 18 11 18s11-10.25 11-18C27 6.925 22.075 2 16 2z"/>
       <path fill="white" transform="translate(8, 8) scale(0.7)"
@@ -385,8 +375,8 @@ const goalProgress = computed(() => {
   if (!activeGoal.value) return 0;
   // Se o objetivo é reduzir, o progresso é o inverso
   if (activeGoal.value.current_value > activeGoal.value.target_value) {
-     const progress = activeGoal.value.target_value / activeGoal.value.current_value;
-     return Math.min(progress, 1);
+      const progress = activeGoal.value.target_value / activeGoal.value.current_value;
+      return Math.min(progress, 1);
   }
   const progress = activeGoal.value.current_value / activeGoal.value.target_value;
   return Math.min(progress, 1);

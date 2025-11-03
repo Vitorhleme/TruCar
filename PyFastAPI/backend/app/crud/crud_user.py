@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone # Adicionado timezone
+from datetime import datetime, timedelta, timezone 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -72,9 +72,7 @@ async def get_users_by_role(
     limit: int = 100
 ) -> List[User]:
     stmt = select(User).where(
-        # --- CORREÇÃO 1 DE 3 ---
-        User.role == role.value,
-        # -----------------------
+        User.role == role,
         User.is_active == True,
         User.organization_id.is_not(None)
     ).options(selectinload(User.organization))
@@ -105,7 +103,18 @@ async def create(db: AsyncSession, *, user_in: "UserCreate", organization_id: in
 async def create_new_organization_and_user(db: AsyncSession, *, user_in: "UserRegister") -> User:
     """Cria uma nova organização e o primeiro utilizador (CLIENTE_DEMO) para ela."""
     from app.schemas.user_schema import UserRegister
-    db_org = Organization(name=user_in.organization_name, sector=user_in.sector)
+    
+    # --- ATUALIZADO: Definindo os limites do plano DEMO aqui ---
+    db_org = Organization(
+        name=user_in.organization_name, 
+        sector=user_in.sector,
+        vehicle_limit=3,          # Limite de 5 veículos
+        driver_limit=2,           # Limite de 2 motoristas
+        freight_order_limit=10,   # Limite de 10 jornadas/mês
+        maintenance_limit=5     # Limite de 5 manutenções
+    )
+    # --- FIM DA ATUALIZAÇÃO ---
+
     user_role = UserRole.CLIENTE_DEMO
 
     hashed_password = get_password_hash(user_in.password)
@@ -180,9 +189,7 @@ async def get_leaderboard_data(db: AsyncSession, *, organization_id: int) -> dic
         .join(Journey, User.id == Journey.driver_id)
         .where(
             User.organization_id == organization_id,
-            # --- CORREÇÃO 2 DE 3 ---
-            User.role == UserRole.DRIVER.value,
-            # -----------------------
+            User.role == UserRole.DRIVER,
             Journey.is_active == False
         )
         .group_by(User.id)
@@ -289,10 +296,7 @@ async def count_by_org(db: AsyncSession, *, organization_id: int, role: UserRole
     """Conta utilizadores numa organização, opcionalmente filtrando por papel."""
     stmt = select(func.count()).select_from(User).where(User.organization_id == organization_id)
     if role:
-        # --- CORREÇÃO 3 DE 3 ---
-        # Aplicando a correção aqui também
-        stmt = stmt.where(User.role == role.value)
-        # -----------------------
+        stmt = stmt.where(User.role == role)
     result = await db.execute(stmt)
     return result.scalar_one()
 

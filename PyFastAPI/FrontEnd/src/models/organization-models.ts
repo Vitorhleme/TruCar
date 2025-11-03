@@ -1,14 +1,50 @@
-import type { User, UserSector } from './auth-models';
+// Em: src/models/organization-models.ts
+import type { UserRole, UserSector } from './auth-models';
 
-/**
- * Representa o objeto completo de uma Organização, como recebido da API.
- * Inclui a lista de utilizadores para que possamos determinar o status (demo/ativo).
- */
-export interface Organization {
+// --- ESTA INTERFACE PRECISA SER ATUALIZADA ---
+export interface OrganizationNestedInUser {
   id: number;
   name: string;
   sector: UserSector;
-  users?: User[]; // A lista de utilizadores associados
+  // --- CAMPOS ADICIONADOS ---
+  vehicle_limit: number;
+  driver_limit: number;
+  freight_order_limit: number;
+  maintenance_limit: number;
+  // --- FIM DA ADIÇÃO ---
+}
+// --- FIM DA ATUALIZAÇÃO ---
+
+export interface UserNestedInOrganization {
+  id: number;
+  role: UserRole;
+}
+
+export interface OrganizationBase {
+  name: string;
+  sector: UserSector;
+}
+
+export interface Organization extends OrganizationBase {
+  id: number;
+  users: UserNestedInOrganization[];
+  // --- CAMPOS ADICIONADOS ---
+  vehicle_limit: number;
+  driver_limit: number;
+  freight_order_limit: number;
+  maintenance_limit: number;
+  // --- FIM DA ADIÇÃO ---
+}
+
+export interface OrganizationUpdate {
+  name?: string;
+  sector?: UserSector;
+  // --- CAMPOS ADICIONADOS ---
+  vehicle_limit?: number;
+  driver_limit?: number;
+  freight_order_limit?: number;
+  maintenance_limit?: number;
+  // --- FIM DA ADIÇÃO ---
 }
 
 export interface OrganizationFuelIntegrationPublic {
@@ -17,18 +53,8 @@ export interface OrganizationFuelIntegrationPublic {
   is_api_secret_set: boolean;
 }
 
-// Usado para enviar os dados do formulário de configuração para o backend
 export interface OrganizationFuelIntegrationUpdate {
   fuel_provider_name?: string;
   fuel_provider_api_key?: string;
   fuel_provider_api_secret?: string;
-}
-
-/**
- * Define os campos que podem ser enviados ao atualizar uma organização.
- * Todos os campos são opcionais.
- */
-export interface OrganizationUpdate {
-  name?: string;
-  sector?: UserSector;
 }

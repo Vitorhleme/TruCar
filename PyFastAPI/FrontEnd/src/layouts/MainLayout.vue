@@ -67,10 +67,10 @@
               <div class="text-weight-bold">Limites do Plano de Demonstração</div>
               <q-list dense>
                 
-                <q-item class="q-pl-none"><q-item-section avatar style="min-width: 30px"><q-icon name="local_shipping" /></q-item-section><q-item-section>Veículos: {{ demoStore.stats?.vehicle_count }} / {{ demoStore.stats?.vehicle_limit }}</q-item-section></q-item>
-                <q-item class="q-pl-none"><q-item-section avatar style="min-width: 30px"><q-icon name="engineering" /></q-item-section><q-item-section>Motoristas: {{ demoStore.stats?.driver_count }} / {{ demoStore.stats?.driver_limit }}</q-item-section></q-item>
-                <q-item class="q-pl-none"><q-item-section avatar style="min-width: 30px"><q-icon name="route" /></q-item-section><q-item-section>Jornadas este mês: {{ demoStore.stats?.journey_count }} / {{ demoStore.stats?.journey_limit }}</q-item-section></q-item>
-              </q-list>
+                <q-item class="q-pl-none"><q-item-section avatar style="min-width: 30px"><q-icon name="local_shipping" /></q-item-section><q-item-section>Veículos: {{ stats?.vehicle_count ?? 0 }} / {{ formatLimit(authStore.user?.organization?.vehicle_limit) }}</q-item-section></q-item>
+                <q-item class="q-pl-none"><q-item-section avatar style="min-width: 30px"><q-icon name="engineering" /></q-item-section><q-item-section>Motoristas: {{ stats?.driver_count ?? 0 }} / {{ formatLimit(authStore.user?.organization?.driver_limit) }}</q-item-section></q-item>
+                <q-item class="q-pl-none"><q-item-section avatar style="min-width: 30px"><q-icon name="route" /></q-item-section><q-item-section>Jornadas este mês: {{ stats?.journey_count ?? 0 }} / {{ formatLimit(authStore.user?.organization?.freight_order_limit) }}</q-item-section></q-item>
+                </q-list>
               <div>Clique para saber mais sobre o plano completo.</div>
             </div>
           </q-tooltip>
@@ -113,7 +113,7 @@
                   </q-item-section>
 
                   <q-item-section side top>
-                     <q-badge v-if="!notification.is_read" color="blue" label="Nova" rounded />
+                    <q-badge v-if="!notification.is_read" color="blue" label="Nova" rounded />
                   </q-item-section>
                 </q-item>
               </q-scroll-area>
@@ -134,7 +134,7 @@
         </q-btn-dropdown>
       </q-toolbar>
       
-       <q-banner v-if="authStore.isImpersonating" inline-actions class="bg-deep-orange text-white text-center shadow-2">
+        <q-banner v-if="authStore.isImpersonating" inline-actions class="bg-deep-orange text-white text-center shadow-2">
          <template v-slot:avatar>
            <q-icon name="visibility_off" color="white" />
          </template>
@@ -144,7 +144,7 @@
          <template v-slot:action>
            <q-btn flat dense color="white" label="Voltar à minha conta" @click="authStore.stopImpersonation()" />
          </template>
-       </q-banner>
+        </q-banner>
     </q-header>
 
     <q-page-container class="app-page-container">
@@ -161,6 +161,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
+// --- ATUALIZADO: Importar storeToRefs ---
+import { storeToRefs } from 'pinia';
 import { useAuthStore } from 'stores/auth-store';
 import { useNotificationStore } from 'stores/notification-store';
 import { useTerminologyStore } from 'stores/terminology-store';
@@ -178,6 +180,11 @@ const authStore = useAuthStore();
 const notificationStore = useNotificationStore();
 const terminologyStore = useTerminologyStore();
 const demoStore = useDemoStore();
+
+// --- ATUALIZADO: Tornar o 'stats' reativo usando storeToRefs ---
+// Isso garante que o template será atualizado sempre que a store mudar.
+const { stats } = storeToRefs(demoStore);
+// --- FIM DA ATUALIZAÇÃO ---
 
 let pollTimer: number;
 
@@ -213,6 +220,19 @@ function showUpgradeDialog() {
     persistent: false
   });
 }
+
+// --- FUNÇÃO ADICIONADA PARA FORMATAR O LIMITE ---
+function formatLimit(limit: number | undefined | null): string {
+  if (limit === undefined || limit === null) {
+    return '--'; // Aguardando carregar
+  }
+  if (limit < 0) {
+    return 'Ilimitado';
+  }
+  return limit.toString();
+}
+// --- FIM DA FUNÇÃO ---
+
 
 // --- FUNÇÕES ADICIONADAS PARA O MENU DE NOTIFICAÇÕES ---
 function formatNotificationDate(date: string) {
@@ -256,6 +276,7 @@ const menuStructure = computed(() => {
 });
 
 function getDriverMenu(): MenuCategory[] {
+// ... (função igual)
     const sector = authStore.userSector;
     const menu: MenuCategory[] = [];
 
@@ -298,6 +319,7 @@ function getDriverMenu(): MenuCategory[] {
 
 
 function getManagerMenu(): MenuCategory[] {
+// ... (função igual)
     const sector = authStore.userSector;
     const menu: MenuCategory[] = [];
 
@@ -369,6 +391,7 @@ onUnmounted(() => { clearInterval(pollTimer); });
 </script>
 
 <style lang="scss" scoped>
+/* ... (todo o seu CSS permanece igual) ... */
 .main-layout-container {
   background-color: #f4f6f9;
   
