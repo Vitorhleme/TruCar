@@ -2,10 +2,13 @@ import { defineStore } from 'pinia';
 import { api } from 'boot/axios';
 import { Notify } from 'quasar';
 import { isAxiosError } from 'axios';
-import type { Part } from 'src/models/part-models';
-import type { InventoryTransaction, TransactionCreate } from 'src/models/inventory-transaction-models';
+// --- 1. IMPORTAR 'PartCreate' ---
+import type { Part, PartCreate } from 'src/models/part-models';
+import type { InventoryTransaction } from 'src/models/inventory-transaction-models';
+import type { InventoryItem, InventoryItemStatus } from 'src/models/inventory-item-models';
 
-export interface PartCreatePayload extends Partial<Part> {
+// --- 2. BASEAR O PAYLOAD EM 'PartCreate' ---
+export interface PartCreatePayload extends PartCreate {
   photo_file?: File | null;
   invoice_file?: File | null;
 }
@@ -14,11 +17,15 @@ export const usePartStore = defineStore('part', {
   state: () => ({
     parts: [] as Part[],
     selectedPartHistory: [] as InventoryTransaction[],
+    availableItems: [] as InventoryItem[], 
+    
     isLoading: false,
     isHistoryLoading: false,
+    isItemsLoading: false,
   }),
 
   actions: {
+    // ... (fetchParts, createPart, updatePart, deletePart... sem mudanças) ...
     async fetchParts(searchQuery: string | null = null) {
       this.isLoading = true;
       try {
@@ -37,7 +44,7 @@ export const usePartStore = defineStore('part', {
       try {
           const formData = new FormData();
           Object.entries(payload).forEach(([key, value]) => {
-              if (key !== 'photo_file' && key !== 'invoice_file' && value !== null && value !== undefined) {
+              if (key !== 'photo_file' && key !== 'invoice_file' && key !== 'stock' && value !== null && value !== undefined) {
                   formData.append(key, String(value));
               }
           });
@@ -68,7 +75,7 @@ export const usePartStore = defineStore('part', {
       try {
           const formData = new FormData();
           Object.entries(payload).forEach(([key, value]) => {
-              if (key !== 'photo_file' && key !== 'invoice_file' && value !== null && value !== undefined) {
+              if (key !== 'photo_file' && key !== 'invoice_file' && key !== 'stock' && value !== null && value !== undefined) {
                   formData.append(key, String(value));
               }
           });
@@ -107,21 +114,65 @@ export const usePartStore = defineStore('part', {
       }
     },
 
-    async addTransaction(partId: number, payload: TransactionCreate): Promise<boolean> {
+    async addItems(partId: number, quantity: number, notes?: string): Promise<boolean> {
       this.isLoading = true;
       try {
-        await api.post(`/parts/${partId}/transaction`, payload);
-        Notify.create({ type: 'positive', message: 'Movimentação de estoque registrada com sucesso!' });
+        const payload = { quantity, notes };
+        const response = await api.post<Part>(`/parts/${partId}/add-items`, payload);
         
-        await this.fetchParts();
+        const index = this.parts.findIndex(p => p.id === partId);
+        if (index !== -1) {
+          // --- 3. CORREÇÃO DO ERRO 'possibly 'undefined'' ---
+          this.parts[index]!.stock = response.data.stock;
+        }
         
+        Notify.create({ type: 'positive', message: `${quantity} itens adicionados com sucesso!` });
         return true;
       } catch (error) {
-        const message = isAxiosError(error) ? error.response?.data?.detail : 'Erro ao registrar movimentação.';
+        const message = isAxiosError(error) ? error.response?.data?.detail : 'Erro ao adicionar itens.';
         Notify.create({ type: 'negative', message: message as string });
         return false;
       } finally {
         this.isLoading = false;
+      }
+    },
+
+    async setItemStatus(partId: number, itemId: number, newStatus: InventoryItemStatus, vehicleId?: number, notes?: string): Promise<boolean> {
+      this.isLoading = true;
+      try {
+        const payload = { new_status: newStatus, related_vehicle_id: vehicleId, notes };
+        // --- 4. CORREÇÃO NA URL (estava '/parts/items/...') ---
+        await api.put(`/parts/items/${itemId}/set-status`, payload);
+
+        const index = this.parts.findIndex(p => p.id === partId);
+        if (index !== -1) {
+          // --- 5. CORREÇÃO DO ERRO 'possibly 'undefined'' ---
+          this.parts[index]!.stock -= 1; // Decrementa o estoque local para reatividade
+        }
+        
+        Notify.create({ type: 'positive', message: 'Status do item atualizado com sucesso!' });
+        return true;
+      } catch (error) {
+        const message = isAxiosError(error) ? error.response?.data?.detail : 'Erro ao mudar status do item.';
+        Notify.create({ type: 'negative', message: message as string });
+        return false;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    async fetchAvailableItems(partId: number) {
+      this.isItemsLoading = true;
+      this.availableItems = [];
+      try {
+        const response = await api.get<InventoryItem[]>(`/parts/${partId}/items`, {
+          params: { status: 'Disponível' }
+        });
+        this.availableItems = response.data;
+      } catch {
+        Notify.create({ type: 'negative', message: 'Falha ao carregar itens disponíveis.' });
+      } finally {
+        this.isItemsLoading = false;
       }
     },
 

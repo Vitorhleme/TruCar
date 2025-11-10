@@ -63,13 +63,13 @@
 
           <q-card-section class="q-py-sm">
             <div class="flex justify-between items-center text-caption text-grey-8">
-              <span>{{ terminologyStore.distanceUnit === 'km' ? 'Odómetro' : 'Horímetro' }}</span>
-              <span class="text-weight-bold text-white-9">{{
-                formatDistance(
-                  terminologyStore.distanceUnit === 'km' ? vehicle.current_km : vehicle.current_engine_hours,
-                  terminologyStore.distanceUnit as 'km' | 'Horas'
-                )
-              }}</span>
+              <span>{{ terminologyStore.distanceUnit.toLowerCase() === 'km' ? 'Odómetro' : 'Horímetro' }}</span>
+<span class="text-weight-bold text-white-9">{{
+  formatDistance(
+    terminologyStore.distanceUnit.toLowerCase() === 'km' ? vehicle.current_km : vehicle.current_engine_hours,
+    terminologyStore.distanceUnit as 'km' | 'Horas'
+  )
+}}</span>
             </div>
             <div v-if="vehicle.next_maintenance_km || vehicle.next_maintenance_date" class="flex justify-between items-center text-caption text-grey-8 q-mt-xs">
               <span>Próx. Revisão</span>

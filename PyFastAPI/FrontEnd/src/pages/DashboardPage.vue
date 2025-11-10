@@ -32,14 +32,14 @@
         <div class="row q-col-gutter-lg q-mb-lg">
     <div class="col-12 col-sm-6 col-lg-3">
         <StatCard
-          label="Total de Veículos"
-          :value="kpis?.total_vehicles ?? 0"
-          :limit="authStore.user?.organization?.vehicle_limit ?? -1"
-          icon="local_shipping"
-          color="primary"
-          :loading="dashboardStore.isLoading"
-          to="/vehicles"
-        />
+  label="Total de Veículos"
+  :value="kpis?.total_vehicles ?? 0"
+  :limit="authStore.isDemo ? (authStore.user?.organization?.vehicle_limit ?? -1) : -1"
+  icon="local_shipping"
+  color="primary"
+  :loading="dashboardStore.isLoading"
+  to="/vehicles"
+/>
     </div>
     <div class="col-12 col-sm-6 col-lg-3">
         <StatCard label="Disponíveis" :value="kpis?.available_vehicles ?? 0" icon="check_circle_outline" color="positive" :loading="dashboardStore.isLoading" to="/vehicles?status=available"/>

@@ -6,6 +6,7 @@ import type { Vehicle } from 'src/models/vehicle-models';
 import { useAuthStore } from './auth-store';
 import { useDashboardStore } from './dashboard-store';
 import { useDemoStore } from './demo-store';
+import { useVehicleStore } from './vehicle-store';
 
 interface JourneyFilters {
   driver_id?: number | null;
@@ -103,15 +104,29 @@ export const useJourneyStore = defineStore('journey', {
 
     async endJourney(journeyId: number, journeyData: JourneyUpdate): Promise<Vehicle | null> {
       this.isLoading = true;
+
+      // --- 2. DECLARE A VARIÁVEL AQUI ---
+      // Esta linha cria a 'vehicleStore' que o erro diz não existir
+      const vehicleStore = useVehicleStore();
+
       try {
         const response = await api.put<{ journey: Journey, vehicle: Vehicle }>(
           `/journeys/${journeyId}/end`,
           journeyData
         );
+        
+        // Atualiza a jornada na lista de jornadas (código que você já tinha)
         const index = this.journeys.findIndex(j => j.id === journeyId);
         if (index !== -1) {
           this.journeys[index] = response.data.journey;
         }
+
+        // --- 3. USE A VARIÁVEL AQUI ---
+        // Agora esta linha funciona, pois 'vehicleStore' foi definida acima
+        if (response.data.vehicle) {
+          vehicleStore.updateVehicleInList(response.data.vehicle);
+        }
+        
         await refreshDashboardData();
         return response.data.vehicle;
       } finally {
@@ -120,4 +135,3 @@ export const useJourneyStore = defineStore('journey', {
     },
   },
 });
-

@@ -4,14 +4,49 @@
       <q-form @submit.prevent="handleSubmit">
         <q-card-section>
           <div class="text-h6">{{ part.name }}</div>
-          <div class="text-subtitle2">Gerenciar Estoque (Atual: {{ part.stock }})</div>
+          <div class="text-subtitle2">Gerenciar Itens (Disponível: {{ part.stock }})</div>
         </q-card-section>
 
         <q-card-section class="q-gutter-y-md">
-          <q-select outlined v-model="formData.transaction_type" :options="transactionOptions" label="Tipo de Movimentação *" :rules="[val => !!val || 'Campo obrigatório']" />
-          <q-input outlined v-model.number="formData.quantity" type="number" label="Quantidade *" :rules="[val => val > 0 || 'Deve ser maior que zero']" />
+          <q-select 
+            outlined 
+            v-model="formData.transaction_type" 
+            :options="filteredTransactionOptions" 
+            label="Tipo de Movimentação *" 
+            :rules="[val => !!val || 'Campo obrigatório']" 
+          />
+
+          <q-input 
+            v-if="formData.transaction_type === 'Entrada'"
+            outlined 
+            v-model.number="formData.quantity" 
+            type="number" 
+            label="Quantidade a adicionar *" 
+            :rules="[val => val > 0 || 'Deve ser maior que zero']" 
+          />
+
+          <q-select
+            v-if="formData.transaction_type === 'Saída para Uso' || formData.transaction_type === 'Fim de Vida'"
+            outlined
+            v-model="formData.item_id"
+            :options="availableItemOptions"
+            label="Selecionar Item (Código) *"
+            :loading="partStore.isItemsLoading"
+            :rules="[val => !!val || 'Selecione um item']"
+            emit-value map-options
+            options-dense
+          />
           
-          <q-select v-if="formData.transaction_type === 'Saída para Uso'" outlined v-model="formData.related_vehicle_id" :options="vehicleOptions" label="Atribuir ao Veículo (Opcional)" emit-value map-options clearable use-input @filter="filterVehicles" />
+          <q-select 
+            v-if="formData.transaction_type === 'Saída para Uso'" 
+            outlined 
+            v-model="formData.related_vehicle_id" 
+            :options="vehicleOptions" 
+            label="Atribuir ao Veículo (Opcional)" 
+            emit-value map-options clearable 
+            use-input @filter="filterVehicles" 
+            :loading="vehicleStore.isLoading"
+          />
 
           <q-input outlined v-model="formData.notes" type="textarea" label="Notas / Motivo (Opcional)" autogrow />
         </q-card-section>
@@ -26,12 +61,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { usePartStore } from 'stores/part-store';
 import { useVehicleStore } from 'stores/vehicle-store';
-import { useVehicleComponentStore } from 'stores/vehicle-component-store'; // <-- IMPORTAR
+import { useVehicleComponentStore } from 'stores/vehicle-component-store';
 import type { Part } from 'src/models/part-models';
-import type { TransactionCreate, TransactionType } from 'src/models/inventory-transaction-models';
+import type { TransactionType, TransactionCreate } from 'src/models/inventory-transaction-models';
+import type { InventoryItemStatus } from 'src/models/inventory-item-models';
 import { Notify } from 'quasar';
 
 const props = defineProps<{ modelValue: boolean, part: Part | null }>();
@@ -39,22 +75,42 @@ const emit = defineEmits(['update:modelValue']);
 
 const partStore = usePartStore();
 const vehicleStore = useVehicleStore();
-const componentStore = useVehicleComponentStore(); // <-- USAR A STORE
+const componentStore = useVehicleComponentStore();
 
-const transactionOptions: TransactionType[] = ["Entrada", "Saída para Uso", "Fim de Vida", "Retorno", "Ajuste Manual"];
-const formData = ref<Partial<TransactionCreate>>({});
+const baseTransactionOptions: TransactionType[] = ["Entrada", "Saída para Uso", "Fim de Vida"];
+
+const formData = ref<Partial<TransactionCreate & { item_id: number | null }>>({});
 
 const vehicleOptions = ref<{label: string, value: number}[]>([]);
 
-// Carrega os veículos quando o diálogo abre
+const filteredTransactionOptions = computed(() => {
+  if (props.part?.category === 'Pneu') {
+    return baseTransactionOptions.filter(opt => opt !== 'Saída para Uso');
+  }
+  return baseTransactionOptions;
+});
+
+const availableItemOptions = computed(() => {
+  return partStore.availableItems.map(item => ({
+    label: `Código: #${item.id} (Criado em: ${new Date(item.created_at).toLocaleDateString()})`,
+    value: item.id
+  }));
+});
+
 watch(() => props.modelValue, (isOpening) => {
-  if (isOpening) {
-    formData.value = { quantity: 1 };
+  if (isOpening && props.part) {
+    formData.value = { quantity: 1, item_id: null, transaction_type: 'Entrada' };
     void vehicleStore.fetchAllVehicles({rowsPerPage: 9999});
+    void partStore.fetchAvailableItems(props.part.id);
   }
 });
 
-// Filtro para a lista de veículos
+watch(() => formData.value.transaction_type, (newType) => {
+  if (props.part && (newType === 'Saída para Uso' || newType === 'Fim de Vida')) {
+    void partStore.fetchAvailableItems(props.part.id);
+  }
+});
+
 function filterVehicles (val: string, update: (callbackFn: () => void) => void) {
   update(() => {
     if (val === '') {
@@ -68,37 +124,45 @@ function filterVehicles (val: string, update: (callbackFn: () => void) => void) 
   });
 }
 
-
 async function handleSubmit() {
   if (!props.part) return;
 
+  const type = formData.value.transaction_type;
+  const notes = formData.value.notes;
   let success = false;
 
-  // Cenário 1: Instalação em um veículo. Usa a store de componentes.
-  if (formData.value.transaction_type === 'Saída para Uso' && formData.value.related_vehicle_id) {
-    if (props.part.stock < (formData.value.quantity ?? 1)) {
-        Notify.create({ type: 'negative', message: 'Estoque insuficiente para esta operação.' });
+  try {
+    if (type === 'Entrada') {
+      const qty = formData.value.quantity;
+      if (!qty || qty <= 0) {
+        Notify.create({ type: 'negative', message: 'A quantidade deve ser maior que zero.' });
         return;
-    }
-    success = await componentStore.installComponent(formData.value.related_vehicle_id, {
-        part_id: props.part.id,
-        quantity: formData.value.quantity ?? 1,
-    });
-    
-    // Se a instalação for bem-sucedida, a store de componentes já busca seus próprios dados.
-    // Agora, também mandamos a partStore buscar os dados dela, garantindo a reatividade.
-    if (success) {
-      await partStore.fetchParts();
-    }
-  } else {
-    // Cenário 2: TODAS as outras transações de estoque.
-    // Usam a mesma ação centralizada na partStore.
-    success = await partStore.addTransaction(props.part.id, formData.value as TransactionCreate);
-  }
+      }
+      success = await partStore.addItems(props.part.id, qty, notes);
 
-  // Se qualquer uma das operações tiver sucesso, fecha o diálogo.
-  if (success) {
-    emit('update:modelValue', false);
+    } else if (type === 'Saída para Uso' || type === 'Fim de Vida') {
+      const itemId = formData.value.item_id;
+      if (!itemId) {
+        Notify.create({ type: 'negative', message: 'Você deve selecionar um item (código) para dar saída.' });
+        return;
+      }
+      
+      const newStatus: InventoryItemStatus = type === 'Saída para Uso' ? 'Em Uso' : 'Fim de Vida';
+      const vehicleId = formData.value.related_vehicle_id;
+      
+      success = await partStore.setItemStatus(props.part.id, itemId, newStatus, vehicleId, notes);
+    
+    } else {
+      Notify.create({ type: 'warning', message: 'Tipo de operação não reconhecido.' });
+      return;
+    }
+
+    if (success) {
+      emit('update:modelValue', false);
+    }
+  // --- CORREÇÃO DO ERRO ESLint 'no-unused-vars' ---
+  } catch  { // <-- MUDANÇA DE 'error' PARA '_error'
+     Notify.create({ type: 'negative', message: 'Ocorreu um erro inesperado.' });
   }
 }
 </script>

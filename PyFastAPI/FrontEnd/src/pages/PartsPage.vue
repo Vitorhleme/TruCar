@@ -46,8 +46,8 @@
 
         <template v-slot:body-cell-stock="props">
           <q-td :props="props">
-            <q-chip :color="getStockColor(props.row.stock, props.row.min_stock)" text-color="white" class="text-weight-bold" square>
-              {{ props.row.stock }} / {{ props.row.min_stock }}
+            <q-chip :color="getStockColor(props.row.stock, props.row.minimum_stock)" text-color="white" class="text-weight-bold" square>
+              {{ props.row.stock }} / {{ props.row.minimum_stock }}
             </q-chip>
           </q-td>
         </template>
@@ -64,8 +64,7 @@
               <q-list dense>
                 <q-item clickable v-close-popup @click="openStockDialog(props.row)">
                   <q-item-section avatar><q-icon name="sync_alt" /></q-item-section>
-                  <q-item-section>Gerenciar Estoque</q-item-section>
-                </q-item>
+                  <q-item-section>Gerenciar Itens</q-item-section> </q-item>
                 <q-item clickable v-close-popup @click="openHistoryDialog(props.row)">
                   <q-item-section avatar><q-icon name="history" /></q-item-section>
                   <q-item-section>Ver Histórico</q-item-section>
@@ -90,7 +89,7 @@
       <q-card style="width: 700px; max-width: 90vw;">
         <q-form @submit.prevent="handleSubmit">
           <q-card-section class="row items-center q-pb-none">
-            <div class="text-h6">{{ isEditing ? 'Editar Item' : 'Adicionar Novo Item' }}</div>
+            <div class="text-h6">{{ isEditing ? 'Editar Item (Template)' : 'Adicionar Novo Item' }}</div>
             <q-space />
             <q-btn icon="close" flat round dense v-close-popup @click="resetForm" />
           </q-card-section>
@@ -100,7 +99,6 @@
               <q-input outlined v-model="formData.name" label="Nome do Item *" :rules="[val => !!val || 'Campo obrigatório']" />
               <q-select outlined v-model="formData.category" :options="categoryOptions" label="Categoria *" :rules="[val => !!val || 'Campo obrigatório']" />
               <q-input v-if="formData.category === 'Pneu'" outlined v-model="formData.serial_number" label="Nº de Série / Fogo *" :rules="[val => !!val || 'Obrigatório para pneus']" />
-              
               <q-input 
                 v-if="formData.category === 'Pneu'" 
                 outlined 
@@ -110,12 +108,12 @@
                 :hint="`Unidade de durabilidade esperada para gerar alertas`" 
                 clearable 
               />
-
               <q-input outlined v-model.number="formData.value" type="number" label="Custo do Item (R$)" prefix="R$" step="0.01" />
               <q-input outlined v-model="formData.part_number" label="Código / Part Number" />
               <q-input outlined v-model="formData.brand" label="Marca" />
               <q-input outlined v-model="formData.location" label="Localização (Ex: Prateleira A-03)" />
             </div>
+            
             <div class="col-12 col-md-5 q-gutter-y-md">
               <q-file v-model="photoFile" label="Foto do Item" outlined clearable accept=".jpg, .jpeg, .png, .webp, .avif">
                 <template v-slot:prepend><q-icon name="photo_camera" /></template>
@@ -125,11 +123,20 @@
               </q-file>
               <q-img v-if="!photoFile && formData.photo_url" :src="getImageUrl(formData.photo_url)" class="q-mt-md rounded-borders" style="height: 120px; max-width: 100%" fit="contain" />
             </div>
+
             <div class="col-12 col-sm-6">
-              <q-input outlined v-model.number="formData.stock" type="number" :label="isEditing ? 'Estoque (somente leitura)' : 'Estoque Inicial *'" :disable="isEditing" :hint="isEditing ? 'Use as Ações para alterar o estoque' : ''" :rules="[val => val >= 0 || 'Valor inválido']" />
+              <q-input 
+                outlined 
+                v-model.number="formData.initial_quantity" 
+                type="number" 
+                label="Quantidade Inicial *" 
+                :disable="isEditing" 
+                :hint="isEditing ? 'Use as Ações para adicionar mais itens' : 'Nº de itens a criar'" 
+                :rules="[val => val >= 0 || 'Valor inválido']" 
+              />
             </div>
             <div class="col-12 col-sm-6">
-              <q-input outlined v-model.number="formData.min_stock" type="number" label="Estoque Mínimo *" :rules="[val => val >= 0 || 'Valor inválido']" />
+              <q-input outlined v-model.number="formData.minimum_stock" type="number" label="Estoque Mínimo *" :rules="[val => val >= 0 || 'Valor inválido']" />
             </div>
             <div class="col-12">
                <q-input outlined v-model="formData.notes" type="textarea" label="Notas (Opcional)" autogrow />
@@ -181,13 +188,14 @@ const lifespanLabel = computed(() => {
   return `Vida Útil em ${unit} (Opcional)`;
 });
 
-const initialFormData: Partial<Part> = {
+// --- FORMDATA ATUALIZADO ---
+const initialFormData: PartCreatePayload = {
   name: '',
   category: 'Peça' as PartCategory,
   part_number: '',
   brand: '',
-  stock: 0,
-  min_stock: 0,
+  initial_quantity: 0,
+  minimum_stock: 0,
   location: '',
   notes: '',
   photo_url: null,
@@ -200,16 +208,17 @@ const formData = ref({ ...initialFormData });
 
 const columns: QTableProps['columns'] = [
   { name: 'photo_url', label: 'Foto', field: 'photo_url', align: 'center' },
-  { name: 'serial_number', label: 'Nº de Série', field: 'serial_number', align: 'left' },
-  { name: 'name', label: 'Item', field: 'name', align: 'left', sortable: true },
+  // { name: 'serial_number', label: 'Nº de Série', field: 'serial_number', align: 'left' }, // Removido, pois agora é por item
+  { name: 'name', label: 'Item (Template)', field: 'name', align: 'left', sortable: true },
   { name: 'category', label: 'Categoria', field: 'category', align: 'left', sortable: true },
   { name: 'value', label: 'Custo Unitário', field: 'value', align: 'right', sortable: true },
-  { name: 'stock', label: 'Estoque', field: 'stock', align: 'center', sortable: true },
+  { name: 'stock', label: 'Estoque (Disp.)', field: 'stock', align: 'center', sortable: true },
   { name: 'location', label: 'Localização', field: 'location', align: 'left' },
   { name: 'actions', label: 'Ações', field: 'actions', align: 'center' },
 ];
 
 function getImageUrl(path: string | null): string {
+  // ... (sem mudança)
   if (!path) return '';
   const baseUrl = api.defaults.baseURL || '';
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
@@ -222,12 +231,14 @@ watch(searchQuery, () => {
 });
 
 function getStockColor(current: number, min: number): string {
+  // ... (sem mudança)
   if (current <= 0) return 'negative';
   if (current <= min) return 'warning';
   return 'positive';
 }
 
 function getCategoryIcon(category: PartCategory): string {
+  // ... (sem mudança)
   const iconMap: Record<PartCategory, string> = {
     'Peça': 'settings', 'Fluído': 'opacity', 'Consumível': 'inbox', 'Outro': 'category', 'Pneu': 'album',
   };
@@ -247,6 +258,7 @@ function openDialog(part: Part | null = null) {
     formData.value = {
       ...initialFormData,
       ...part,
+      initial_quantity: 0, // Não podemos adicionar estoque inicial na edição
     };
   } else {
     resetForm();
@@ -274,6 +286,9 @@ async function handleSubmit() {
     payload.invoice_file = invoiceFile.value;
   }
   
+  // Remove 'stock' pois não é enviado
+  delete (payload as any).stock; 
+  
   const success = isEditing.value && editingPart.value
     ? await partStore.updatePart(editingPart.value.id, payload)
     : await partStore.createPart(payload);
@@ -285,9 +300,10 @@ async function handleSubmit() {
 }
 
 function confirmDelete(part: Part) {
+  // ... (sem mudança)
   $q.dialog({
     title: 'Confirmar Exclusão',
-    message: `Tem certeza que deseja remover o item "${part.name}"? Todo o seu histórico de movimentações será perdido.`,
+    message: `Tem certeza que deseja remover o "template" "${part.name}"? Todos os ${part.stock} itens associados e seu histórico serão perdidos.`,
     cancel: true,
     persistent: false,
     ok: { label: 'Excluir', color: 'negative', unelevated: true },
