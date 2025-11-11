@@ -5,7 +5,7 @@ from jinja2 import Environment, FileSystemLoader
 from xhtml2pdf import pisa
 import io
 from datetime import datetime, date, timedelta
-
+import logging # <-- Adicione o import de logging
 from app import crud
 from app.api import deps
 from app.models.user_model import User, UserRole
@@ -114,9 +114,13 @@ async def generate_vehicle_consolidated_report(
             await crud.demo_usage.increment_usage(db, organization_id=current_user.organization_id, resource_type="reports")
         return report_data
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        # Mude de 404 para 500 e exponha o erro real do CRUD
+        logging.error(f"Erro de Valor no CRUD do Relatório: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro Interno ao processar dados do relatório: {e}")
     except Exception as e:
+        logging.error(f"Erro Inesperado no Relatório: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ocorreu um erro ao gerar o relatório: {e}")
+# --- FIM DA CORREÇÃO ---
 
 # --- O endpoint de 'dashboard-summary' não é um relatório, então permanece igual ---
 @router.get("/dashboard-summary", response_model=DashboardSummary)

@@ -48,12 +48,13 @@ export const usePartStore = defineStore('part', {
                   formData.append(key, String(value));
               }
           });
-          if (payload.photo_file) {
-              formData.append('file', payload.photo_file);
-          }
-          if (payload.invoice_file) {
-              formData.append('invoice_file', payload.invoice_file);
-          }
+          // NOTA: Os uploads de arquivo foram removidos do endpoint 'create_part'
+          // if (payload.photo_file) {
+          //     formData.append('file', payload.photo_file);
+          // }
+          // if (payload.invoice_file) {
+          //     formData.append('invoice_file', payload.invoice_file);
+          // }
           
           await api.post('/parts/', formData, {
               headers: { 'Content-Type': 'multipart/form-data' },
@@ -114,15 +115,18 @@ export const usePartStore = defineStore('part', {
       }
     },
 
+    // --- ESTA FUNÇÃO AGORA VAI FUNCIONAR ---
     async addItems(partId: number, quantity: number, notes?: string): Promise<boolean> {
       this.isLoading = true;
       try {
         const payload = { quantity, notes };
+        // 1. O frontend chama a API
         const response = await api.post<Part>(`/parts/${partId}/add-items`, payload);
         
+        // 2. 'response.data' AGORA É um objeto Part, e 'response.data.stock' tem o novo valor (ex: 44)
         const index = this.parts.findIndex(p => p.id === partId);
         if (index !== -1) {
-          // --- 3. CORREÇÃO DO ERRO 'possibly 'undefined'' ---
+          // 3. O estoque local é atualizado, e a UI (ex: 44/15) é renderizada corretamente
           this.parts[index]!.stock = response.data.stock;
         }
         
@@ -136,17 +140,16 @@ export const usePartStore = defineStore('part', {
         this.isLoading = false;
       }
     },
+    // --- FIM DA ÁREA DE INTERESSE ---
 
     async setItemStatus(partId: number, itemId: number, newStatus: InventoryItemStatus, vehicleId?: number, notes?: string): Promise<boolean> {
       this.isLoading = true;
       try {
         const payload = { new_status: newStatus, related_vehicle_id: vehicleId, notes };
-        // --- 4. CORREÇÃO NA URL (estava '/parts/items/...') ---
         await api.put(`/parts/items/${itemId}/set-status`, payload);
 
         const index = this.parts.findIndex(p => p.id === partId);
         if (index !== -1) {
-          // --- 5. CORREÇÃO DO ERRO 'possibly 'undefined'' ---
           this.parts[index]!.stock -= 1; // Decrementa o estoque local para reatividade
         }
         

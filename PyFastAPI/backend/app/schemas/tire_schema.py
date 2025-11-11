@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
-from .part_schema import Part, PartPublic
+# 1. CORREÇÃO: Remover 'Part', importar apenas 'PartPublic'
+from .part_schema import PartPublic
 
 # --- Schemas para Ações ---
 
@@ -40,7 +41,8 @@ class TireLayoutResponse(BaseModel):
 # --- Schema de Histórico ---
 class VehicleTireHistory(BaseModel):
     id: int
-    part: Part
+    # 2. CORREÇÃO: Usar 'PartPublic' ao invés de 'Part'
+    part: PartPublic
     position_code: str
     install_km: float
     removal_km: Optional[float] = None

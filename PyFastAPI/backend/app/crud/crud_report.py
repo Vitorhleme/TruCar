@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_
 from datetime import datetime, timedelta, date
 from typing import List, Optional
-
+from sqlalchemy.orm import selectinload # <--- 1. ADICIONE ESTE IMPORT
 from app import crud
 # --- NOVOS IMPORTS ---
 from app.models.user_model import User
@@ -364,7 +364,11 @@ async def get_vehicle_consolidated_data(
     maintenance_stmt = select(MaintenanceRequest).where(
         MaintenanceRequest.vehicle_id == vehicle_id,
         func.date(MaintenanceRequest.created_at).between(start_date, end_date)
+    ).options(
+        selectinload(MaintenanceRequest.comments) # <-- ESTA LINHA CORRIGE O ERRO
     )
+
+    
     
     costs = (await db.execute(costs_stmt)).scalars().all()
     fuel_logs = (await db.execute(fuel_logs_stmt)).scalars().all()

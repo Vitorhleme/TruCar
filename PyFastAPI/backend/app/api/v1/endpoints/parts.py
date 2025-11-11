@@ -6,12 +6,14 @@ import shutil
 from pathlib import Path
 from pydantic import BaseModel
 import logging # (Manter para logs)
+import aiofiles # Importamos, mas não vamos usar no 'create'
+
 from app import crud
 from app.api import deps
 from app.models.user_model import User
 from app.models.part_model import PartCategory, InventoryItemStatus
 from app.models.notification_model import NotificationType
-from app.schemas.part_schema import PartPublic, PartCreate, PartUpdate, InventoryItemPublic
+from app.schemas.part_schema import PartPublic, PartCreate, PartUpdate, InventoryItemPublic, PartListPublic
 from app.schemas.inventory_transaction_schema import TransactionPublic
 from app.crud import crud_part 
 from app.models.inventory_transaction_model import TransactionType
@@ -23,18 +25,31 @@ UPLOAD_INVOICE_DIRECTORY = Path("static/uploads/invoices")
 UPLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
 UPLOAD_INVOICE_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
+# Função de upload assíncrona (usada apenas pelo 'update_part' agora)
 async def save_upload_file(upload_file: UploadFile, directory: Path) -> str:
+    if not upload_file:
+        return None
+        
     extension = Path(upload_file.filename).suffix if upload_file.filename else ""
     unique_filename = f"{uuid.uuid4()}{extension}"
     file_path = directory / unique_filename
     
-    with file_path.open("wb") as buffer:
-        shutil.copyfileobj(upload_file.file, buffer)
+    try:
+        async with aiofiles.open(file_path, "wb") as buffer:
+            while content := await upload_file.read(1024 * 1024):
+                await buffer.write(content)
+    except Exception as e:
+        logging.error(f"Falha ao salvar arquivo: {e}")
+        return None
+    finally:
+        await upload_file.close()
         
     return f"/{file_path}"
 
-# --- CORREÇÃO (Endpoint faz commit E recarrega com estoque) ---
-@router.post("/", response_model=PartPublic, status_code=status.HTTP_201_CREATED,
+
+# --- 1. CORREÇÃO EM 'create_part' (REMOVENDO LÓGICA) ---
+# Removido o 'response_model' E a lógica de upload de arquivo
+@router.post("/", status_code=status.HTTP_201_CREATED,
              dependencies=[Depends(deps.check_demo_limit("parts"))])
 async def create_part(
     name: str = Form(...),
@@ -49,8 +64,8 @@ async def create_part(
     value: Optional[float] = Form(None),
     serial_number: Optional[str] = Form(None),
     lifespan_km: Optional[int] = Form(None),
-    file: Optional[UploadFile] = File(None),
-    invoice_file: Optional[UploadFile] = File(None),
+    # REMOVIDO: file: Optional[UploadFile] = File(None),
+    # REMOVIDO: invoice_file: Optional[UploadFile] = File(None),
     current_user: User = Depends(deps.get_current_active_manager)
 ):
     part_in = PartCreate(
@@ -61,11 +76,8 @@ async def create_part(
         lifespan_km=lifespan_km
     )
     
+    # Lógica de upload removida para garantir que não haja erro
     photo_url, invoice_url = None, None
-    if file:
-        photo_url = await save_upload_file(file, UPLOAD_DIRECTORY)
-    if invoice_file:
-        invoice_url = await save_upload_file(invoice_file, UPLOAD_INVOICE_DIRECTORY)
     
     try:
         # 1. CRUD (NÃO FAZ COMMIT)
@@ -74,23 +86,23 @@ async def create_part(
             user_id=current_user.id, photo_url=photo_url, invoice_url=invoice_url
         )
         
-        # 2. ENDPOINT FAZ COMMIT
+        # 2. ENDPOINT FAZ COMMIT (O item é criado aqui)
         await db.commit()
         
-        # 3. Recarregamos aqui para obter o estoque calculado após o commit
-        part_with_stock = await crud_part.get_part_with_stock(
-            db, part_id=part_db.id, organization_id=current_user.organization_id
-        )
-        return part_with_stock
+        # 3. SUA SOLUÇÃO: Não recarregamos. Apenas retornamos um sucesso 201.
+        # O frontend não receberá o erro e poderá recarregar a página.
+        return {"id": part_db.id, "message": "Peça criada com sucesso."}
         
     except ValueError as e:
         await db.rollback() 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e: 
         await db.rollback()
+        logging.error(f"Erro ao criar peça: {e}", exc_info=True) # Loga o erro real
         raise HTTPException(status_code=500, detail=f"Erro ao criar peça: {e}")
     
-# --- CORREÇÃO (Endpoint faz commit E recarrega com estoque) ---
+
+# A função 'update_part' (Editar) agora é usada para adicionar as fotos
 @router.put("/{part_id}", response_model=PartPublic)
 async def update_part(
     part_id: int,
@@ -107,8 +119,8 @@ async def update_part(
     serial_number: Optional[str] = Form(None),
     lifespan_km: Optional[int] = Form(None),
     condition: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None),
-    invoice_file: Optional[UploadFile] = File(None),
+    file: Optional[UploadFile] = File(None), # <--- Upload de arquivo mantido aqui
+    invoice_file: Optional[UploadFile] = File(None), # <--- Upload de arquivo mantido aqui
     current_user: User = Depends(deps.get_current_active_manager)
 ):
     db_part = await crud_part.get_simple(db, part_id=part_id, organization_id=current_user.organization_id)
@@ -125,32 +137,26 @@ async def update_part(
     
     photo_url = db_part.photo_url
     if file:
-        photo_url = await save_upload_file(file, UPLOAD_DIRECTORY)
+        photo_url = await save_upload_file(file, UPLOAD_DIRECTORY) # Usa a nova função async
 
     invoice_url = db_part.invoice_url
     if invoice_file:
-        invoice_url = await save_upload_file(invoice_file, UPLOAD_INVOICE_DIRECTORY)
+        invoice_url = await save_upload_file(invoice_file, UPLOAD_INVOICE_DIRECTORY) # Usa a nova função async
     
     try:
-        # 1. CRUD (NÃO FAZ COMMIT)
         updated_part_simple = await crud_part.update(
             db=db, db_obj=db_part, obj_in=part_in, photo_url=photo_url, invoice_url=invoice_url
         )
-        
-        # 2. ENDPOINT FAZ COMMIT
         await db.commit()
-        
-        # 3. Recarregamos aqui para obter o estoque calculado após o commit
         part_with_stock = await crud_part.get_part_with_stock(
             db, part_id=updated_part_simple.id, organization_id=current_user.organization_id
         )
         return part_with_stock
-        
     except Exception as e: 
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar peça: {e}")
 
-@router.get("/", response_model=List[PartPublic])
+@router.get("/", response_model=List[PartListPublic])
 async def read_parts(
     db: AsyncSession = Depends(deps.get_db),
     skip: int = 0,
@@ -158,13 +164,11 @@ async def read_parts(
     search: Optional[str] = None,
     current_user: User = Depends(deps.get_current_active_manager)
 ):
-    # Leituras (GET) não precisam de commit/rollback
     parts = await crud_part.get_multi_by_org(
         db, organization_id=current_user.organization_id, search=search, skip=skip, limit=limit
     )
     return parts
 
-# --- CORREÇÃO (Endpoint faz commit) ---
 @router.delete("/{part_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_part(
     part_id: int,
@@ -176,10 +180,7 @@ async def delete_part(
         raise HTTPException(status_code=404, detail="Peça não encontrada.")
     
     try:
-        # 1. CRUD (NÃO FAZ COMMIT)
         await crud_part.remove(db=db, id=part_id, organization_id=current_user.organization_id)
-        
-        # 2. ENDPOINT FAZ COMMIT
         await db.commit()
     except Exception as e: 
         await db.rollback()
@@ -190,15 +191,15 @@ class AddItemsPayload(BaseModel):
     quantity: int
     notes: Optional[str] = None
 
-# --- ROTA (Corrigida com try/except) ---
-@router.post("/{part_id}/add-items", response_model=PartPublic, status_code=status.HTTP_201_CREATED)
+# --- 4. CORREÇÃO EM 'add_inventory_items' (SUA LÓGICA) ---
+# Removido o 'response_model=PartPublic'
+@router.post("/{part_id}/add-items", status_code=status.HTTP_201_CREATED)
 async def add_inventory_items(
     part_id: int,
     payload: AddItemsPayload,
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_manager)
 ):
-    logging.warning(f"ID DA SESSÃO NO ENDPOINT: {id(db)}")
     
     part = await crud_part.get_simple(db, part_id=part_id, organization_id=current_user.organization_id)
     if not part:
@@ -207,28 +208,26 @@ async def add_inventory_items(
         raise HTTPException(status_code=400, detail="Quantidade deve ser maior que zero.")
 
     try:
-        # 1. CRUD (NÃO FAZ COMMIT)
         await crud_part.create_inventory_items(
             db=db, part=part, quantity=payload.quantity, 
             user_id=current_user.id, notes=payload.notes
         )
-        # 2. ENDPOINT FAZ COMMIT
         await db.commit()
     
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao adicionar itens: {e}")
     
-    # 3. Recarregamos após o commit
-    updated_part = await crud_part.get_part_with_stock(db, part_id=part.id, organization_id=current_user.organization_id)
-    return updated_part
+    # SUA SOLUÇÃO: Retorna uma resposta simples de sucesso 201.
+    return {"message": "Itens adicionados com sucesso."}
 
+
+# --- O RESTO DO ARQUIVO NÃO PRECISA DE MUDANÇAS ---
 class SetItemStatusPayload(BaseModel):
     new_status: InventoryItemStatus
     related_vehicle_id: Optional[int] = None
     notes: Optional[str] = None
 
-# --- ROTA (Corrigida com try/except) ---
 @router.put("/items/{item_id}/set-status", response_model=InventoryItemPublic)
 async def set_inventory_item_status(
     item_id: int,
@@ -244,7 +243,6 @@ async def set_inventory_item_status(
         raise HTTPException(status_code=400, detail=f"Item não está disponível (status atual: {item.status}).")
 
     try:
-        # 1. CRUD (NÃO FAZ COMMIT)
         updated_item = await crud_part.change_item_status(
             db=db, item=item, new_status=payload.new_status,
             user_id=current_user.id, vehicle_id=payload.related_vehicle_id, notes=payload.notes
@@ -255,17 +253,18 @@ async def set_inventory_item_status(
             message = f"Estoque baixo para a peça '{part.name}'. Quantidade atual: {part.stock}."
             background_tasks.add_task(
                 crud.notification.create_notification,
-                db=db, message=message,
+                # db=db, # Removido
+                message=message,
                 notification_type=NotificationType.LOW_STOCK,
-                organization_id=part.organization_id,
+                organization_id=part.organization_id, 
                 send_to_managers=True,
                 related_entity_type="part",
                 related_entity_id=part.id
             )
 
-        # 2. ENDPOINT FAZ COMMIT
         await db.commit()
         
+        await db.refresh(updated_item, ["part"]) 
         return updated_item
         
     except ValueError as e:
@@ -273,6 +272,7 @@ async def set_inventory_item_status(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         await db.rollback()
+        logging.error(f"Erro ao mudar status do item: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro ao mudar status do item: {e}")
 
 
