@@ -5,8 +5,7 @@ import uuid
 import shutil
 from pathlib import Path
 from pydantic import BaseModel
-# from sqlalchemy import select <-- REMOVIDO (Não é mais necessário aqui)
-
+import logging # (Manter para logs)
 from app import crud
 from app.api import deps
 from app.models.user_model import User
@@ -14,19 +13,17 @@ from app.models.part_model import PartCategory, InventoryItemStatus
 from app.models.notification_model import NotificationType
 from app.schemas.part_schema import PartPublic, PartCreate, PartUpdate, InventoryItemPublic
 from app.schemas.inventory_transaction_schema import TransactionPublic
-from app.crud import crud_part # Importar o crud
+from app.crud import crud_part 
 from app.models.inventory_transaction_model import TransactionType
 
 router = APIRouter()
 
-# --- Diretórios (sem mudança) ---
 UPLOAD_DIRECTORY = Path("static/uploads/parts")
 UPLOAD_INVOICE_DIRECTORY = Path("static/uploads/invoices")
 UPLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
 UPLOAD_INVOICE_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
 async def save_upload_file(upload_file: UploadFile, directory: Path) -> str:
-    # ... (sem mudança)
     extension = Path(upload_file.filename).suffix if upload_file.filename else ""
     unique_filename = f"{uuid.uuid4()}{extension}"
     file_path = directory / unique_filename
@@ -36,11 +33,10 @@ async def save_upload_file(upload_file: UploadFile, directory: Path) -> str:
         
     return f"/{file_path}"
 
-
+# --- CORREÇÃO (Endpoint faz commit E recarrega com estoque) ---
 @router.post("/", response_model=PartPublic, status_code=status.HTTP_201_CREATED,
              dependencies=[Depends(deps.check_demo_limit("parts"))])
 async def create_part(
-    # ... (função 'create_part' sem mudança)
     name: str = Form(...),
     category: str = Form(...),
     minimum_stock: int = Form(...),
@@ -72,18 +68,31 @@ async def create_part(
         invoice_url = await save_upload_file(invoice_file, UPLOAD_INVOICE_DIRECTORY)
     
     try:
-        # A função create do crud agora lida com tudo, inclusive o commit
+        # 1. CRUD (NÃO FAZ COMMIT)
         part_db = await crud_part.create(
             db=db, part_in=part_in, organization_id=current_user.organization_id, 
             user_id=current_user.id, photo_url=photo_url, invoice_url=invoice_url
         )
-        return part_db
+        
+        # 2. ENDPOINT FAZ COMMIT
+        await db.commit()
+        
+        # 3. Recarregamos aqui para obter o estoque calculado após o commit
+        part_with_stock = await crud_part.get_part_with_stock(
+            db, part_id=part_db.id, organization_id=current_user.organization_id
+        )
+        return part_with_stock
+        
     except ValueError as e:
+        await db.rollback() 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e: 
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao criar peça: {e}")
     
+# --- CORREÇÃO (Endpoint faz commit E recarrega com estoque) ---
 @router.put("/{part_id}", response_model=PartPublic)
 async def update_part(
-    # ... (função 'update_part' sem mudança)
     part_id: int,
     background_tasks: BackgroundTasks,
     name: str = Form(...),
@@ -106,8 +115,6 @@ async def update_part(
     if not db_part:
         raise HTTPException(status_code=404, detail="Peça não encontrada.")
         
-    original_condition = db_part.condition if hasattr(db_part, 'condition') else None
-    
     part_in = PartUpdate(
         name=name, category=category, minimum_stock=minimum_stock, part_number=part_number, 
         brand=brand, location=location, notes=notes, value=value,
@@ -124,29 +131,42 @@ async def update_part(
     if invoice_file:
         invoice_url = await save_upload_file(invoice_file, UPLOAD_INVOICE_DIRECTORY)
     
-    updated_part = await crud_part.update(
-        db=db, db_obj=db_part, obj_in=part_in, photo_url=photo_url, invoice_url=invoice_url
-    )
-    
-    return updated_part
+    try:
+        # 1. CRUD (NÃO FAZ COMMIT)
+        updated_part_simple = await crud_part.update(
+            db=db, db_obj=db_part, obj_in=part_in, photo_url=photo_url, invoice_url=invoice_url
+        )
+        
+        # 2. ENDPOINT FAZ COMMIT
+        await db.commit()
+        
+        # 3. Recarregamos aqui para obter o estoque calculado após o commit
+        part_with_stock = await crud_part.get_part_with_stock(
+            db, part_id=updated_part_simple.id, organization_id=current_user.organization_id
+        )
+        return part_with_stock
+        
+    except Exception as e: 
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar peça: {e}")
 
 @router.get("/", response_model=List[PartPublic])
 async def read_parts(
-    # ... (função 'read_parts' sem mudança)
     db: AsyncSession = Depends(deps.get_db),
     skip: int = 0,
     limit: int = 100,
     search: Optional[str] = None,
     current_user: User = Depends(deps.get_current_active_manager)
 ):
+    # Leituras (GET) não precisam de commit/rollback
     parts = await crud_part.get_multi_by_org(
         db, organization_id=current_user.organization_id, search=search, skip=skip, limit=limit
     )
     return parts
 
+# --- CORREÇÃO (Endpoint faz commit) ---
 @router.delete("/{part_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_part(
-    # ... (função 'delete_part' sem mudança)
     part_id: int,
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_manager)
@@ -154,17 +174,23 @@ async def delete_part(
     db_part = await crud_part.get_simple(db, part_id=part_id, organization_id=current_user.organization_id)
     if not db_part:
         raise HTTPException(status_code=404, detail="Peça não encontrada.")
-    await crud_part.remove(db=db, id=part_id, organization_id=current_user.organization_id)
+    
+    try:
+        # 1. CRUD (NÃO FAZ COMMIT)
+        await crud_part.remove(db=db, id=part_id, organization_id=current_user.organization_id)
+        
+        # 2. ENDPOINT FAZ COMMIT
+        await db.commit()
+    except Exception as e: 
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao deletar peça: {e}")
 
-#
-# --- NOVAS ROTAS PARA GERENCIAR ITENS SERIALIZADOS ---
-#
 
 class AddItemsPayload(BaseModel):
     quantity: int
     notes: Optional[str] = None
 
-# --- ROTA DO ERRO 2 (MissingGreenlet) ---
+# --- ROTA (Corrigida com try/except) ---
 @router.post("/{part_id}/add-items", response_model=PartPublic, status_code=status.HTTP_201_CREATED)
 async def add_inventory_items(
     part_id: int,
@@ -172,23 +198,28 @@ async def add_inventory_items(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_manager)
 ):
-    """Adiciona 'quantity' novos itens serializados a um 'template' de peça."""
+    logging.warning(f"ID DA SESSÃO NO ENDPOINT: {id(db)}")
+    
     part = await crud_part.get_simple(db, part_id=part_id, organization_id=current_user.organization_id)
     if not part:
         raise HTTPException(status_code=404, detail="Peça (template) não encontrada.")
     if payload.quantity <= 0:
         raise HTTPException(status_code=400, detail="Quantidade deve ser maior que zero.")
 
-    # --- CORREÇÃO (MissingGreenlet) ---
-    # A função do CRUD agora só adiciona à sessão, sem flush ou commit
-    await crud_part.create_inventory_items(
-        db=db, part=part, quantity=payload.quantity, 
-        user_id=current_user.id, notes=payload.notes
-    )
-    # O commit único é feito aqui, no endpoint, de forma segura
-    await db.commit()
-    # --- FIM DA CORREÇÃO ---
+    try:
+        # 1. CRUD (NÃO FAZ COMMIT)
+        await crud_part.create_inventory_items(
+            db=db, part=part, quantity=payload.quantity, 
+            user_id=current_user.id, notes=payload.notes
+        )
+        # 2. ENDPOINT FAZ COMMIT
+        await db.commit()
     
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao adicionar itens: {e}")
+    
+    # 3. Recarregamos após o commit
     updated_part = await crud_part.get_part_with_stock(db, part_id=part.id, organization_id=current_user.organization_id)
     return updated_part
 
@@ -197,9 +228,9 @@ class SetItemStatusPayload(BaseModel):
     related_vehicle_id: Optional[int] = None
     notes: Optional[str] = None
 
+# --- ROTA (Corrigida com try/except) ---
 @router.put("/items/{item_id}/set-status", response_model=InventoryItemPublic)
 async def set_inventory_item_status(
-    # ... (função 'set_inventory_item_status' sem mudança)
     item_id: int,
     payload: SetItemStatusPayload,
     background_tasks: BackgroundTasks,
@@ -213,6 +244,7 @@ async def set_inventory_item_status(
         raise HTTPException(status_code=400, detail=f"Item não está disponível (status atual: {item.status}).")
 
     try:
+        # 1. CRUD (NÃO FAZ COMMIT)
         updated_item = await crud_part.change_item_status(
             db=db, item=item, new_status=payload.new_status,
             user_id=current_user.id, vehicle_id=payload.related_vehicle_id, notes=payload.notes
@@ -231,11 +263,19 @@ async def set_inventory_item_status(
                 related_entity_id=part.id
             )
 
+        # 2. ENDPOINT FAZ COMMIT
+        await db.commit()
+        
         return updated_item
+        
     except ValueError as e:
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao mudar status do item: {e}")
 
-# --- ROTA DO ERRO 1 (NameError) ---
+
 @router.get("/{part_id}/items", response_model=List[InventoryItemPublic])
 async def get_items_for_part(
     part_id: int,
@@ -243,21 +283,15 @@ async def get_items_for_part(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_manager)
 ):
-    """Lista todos os itens serializados de um Part (template), opcionalmente por status."""
     part = await crud_part.get_simple(db, part_id=part_id, organization_id=current_user.organization_id)
     if not part:
         raise HTTPException(status_code=404, detail="Peça (template) não encontrada.")
     
-    # --- CORREÇÃO (NameError) ---
-    # A lógica foi movida para o CRUD
     items = await crud_part.get_items_for_part(db, part_id=part_id, status=status)
-    # --- FIM DA CORREÇÃO ---
-    
     return items
 
 @router.get("/{part_id}/history", response_model=List[TransactionPublic])
 async def read_part_history(
-    # ... (função 'read_part_history' sem mudança)
     part_id: int,
     db: AsyncSession = Depends(deps.get_db),
     skip: int = 0,

@@ -16,16 +16,15 @@
           no-data-label="Nenhuma movimentação encontrada para este item."
           flat bordered dense
         >
-          <template v-slot:body-cell-quantity_change="props">
+          <template v-slot:body-cell-item_code="props">
             <q-td :props="props">
-              <q-chip
-                :color="props.value > 0 ? 'positive' : 'negative'"
-                text-color="white"
-                :label="`${props.value > 0 ? '+' : ''}${props.value}`"
-                square
-              />
+              <q-chip v-if="props.value" dense square label-color="white" color="grey-8">
+                #{{ props.value }}
+              </q-chip>
+              <span v-else>N/A</span>
             </q-td>
           </template>
+
         </q-table>
       </q-card-section>
     </q-card>
@@ -43,12 +42,46 @@ const emit = defineEmits(['update:modelValue']);
 
 const partStore = usePartStore();
 
+// --- COLUNAS DO HISTÓRICO ATUALIZADAS ---
 const historyColumns: QTableProps['columns'] = [
-  { name: 'timestamp', label: 'Data', field: 'timestamp', sortable: true, align: 'left', format: (val) => format(new Date(val), 'dd/MM/yyyy HH:mm') },
-  { name: 'transaction_type', label: 'Tipo', field: 'transaction_type', sortable: true, align: 'left' },
-  { name: 'quantity_change', label: 'Alteração', field: 'quantity_change', align: 'center' },
-  { name: 'stock_after_transaction', label: 'Estoque Final', field: 'stock_after_transaction', align: 'center' },
-  { name: 'user', label: 'Usuário', field: (row) => row.user?.full_name || 'Sistema', align: 'left' },
-  { name: 'notes', label: 'Notas', field: 'notes', align: 'left', style: 'white-space: pre-wrap;' },
+  { 
+    name: 'timestamp', 
+    label: 'Data', 
+    field: 'timestamp', 
+    sortable: true, 
+    align: 'left', 
+    format: (val) => format(new Date(val), 'dd/MM/yyyy HH:mm') 
+  },
+  { 
+    name: 'transaction_type', 
+    label: 'Tipo', 
+    field: 'transaction_type', 
+    sortable: true, 
+    align: 'left' 
+  },
+  // --- NOVA COLUNA ---
+  { 
+    name: 'item_code', 
+    label: 'Item (Cód.)', 
+    // O dado agora vem de 'item.id'
+    field: (row) => row.item?.id, 
+    align: 'center' 
+  }, 
+  // --- COLUNAS 'undefined' REMOVIDAS ---
+  // { name: 'quantity_change', label: 'Alteração', field: 'quantity_change', align: 'center' },
+  // { name: 'stock_after_transaction', label: 'Estoque Final', field: 'stock_after_transaction', align: 'center' },
+  { 
+    name: 'user', 
+    label: 'Usuário', 
+    field: (row) => row.user?.full_name || 'Sistema', 
+    align: 'left' 
+  },
+  { 
+    name: 'notes', 
+    label: 'Notas', 
+    field: 'notes', 
+    align: 'left', 
+    style: 'white-space: pre-wrap;' 
+  },
 ];
 </script>
