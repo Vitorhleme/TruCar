@@ -1,7 +1,18 @@
 import type { VehicleCost } from './vehicle-cost-models';
 import type { FuelLog } from './fuel-log-models';
 import type { MaintenanceRequest } from './maintenance-models';
+import type { Fine } from './fine-models';
+import type { Journey } from './journey-models';
+import type { DocumentPublic } from './document-models'; // Este estava certo
+import type { VehicleTire } from './tire-models'; // Corrigido de Tire para VehicleTire
 
+// --- CORREÇÃO: Exportar DashboardSummary ---
+export interface DashboardSummary {
+  total_vehicles: number;
+  active_journeys: number;
+  total_costs_last_30_days: number;
+  maintenance_open_requests: number;
+}
 export interface KPI {
   total_vehicles: number;
   available_vehicles: number;
@@ -150,7 +161,8 @@ export interface DriverDashboardResponse {
 }
 
 export interface VehicleReportPerformanceSummary {
-  total_distance_km: number;
+  total_activity_value: number; // Renomeado
+  total_activity_unit: string;  // Adicionado
   total_fuel_liters: number;
   average_consumption: number;
 }
@@ -158,23 +170,84 @@ export interface VehicleReportPerformanceSummary {
 // Corresponde ao schema VehicleReportFinancialSummary do backend
 export interface VehicleReportFinancialSummary {
   total_costs: number;
-  cost_per_km: number;
+  cost_per_metric: number;
+  metric_unit: string;           // Renomeado
   costs_by_category: Record<string, number>;
 }
 
 // Corresponde ao schema principal VehicleConsolidatedReport do backend
+// --- INTERFACE PRINCIPAL (ATUALIZADA) ---
 export interface VehicleConsolidatedReport {
+  // Cabeçalho
   vehicle_id: number;
   vehicle_identifier: string;
   vehicle_model: string;
-  report_period_start: string; // vem como string 'YYYY-MM-DD'
-  report_period_end: string;
-  generated_at: string; // vem como string ISO
+  report_period_start: string; // ou date
+  report_period_end: string; // ou date
+  generated_at: string; // ou date
 
-  performance_summary: VehicleReportPerformanceSummary;
-  financial_summary: VehicleReportFinancialSummary;
-  
-  costs_detailed: VehicleCost[];
-  fuel_logs_detailed: FuelLog[];
-  maintenance_detailed: MaintenanceRequest[];
+  // Resumos (Opcionais)
+  performance_summary?: VehicleReportPerformanceSummary | null;
+  financial_summary?: VehicleReportFinancialSummary | null;
+
+  // --- CORREÇÃO: Tipos corrigidos ---
+  costs_detailed?: VehicleCost[] | null;
+  fuel_logs_detailed?: FuelLog[] | null;
+  maintenance_detailed?: MaintenanceRequest[] | null;
+  fines_detailed?: Fine[] | null;
+  journeys_detailed?: Journey[] | null;
+  documents_detailed?: DocumentPublic[] | null;
+  tires_detailed?: VehicleTire[] | null; // Corrigido
+}
+
+// --- Outros Relatórios (Sem alteração) ---
+export interface DriverPerformanceEntry {
+  driver_id: number;
+  driver_name: string;
+  total_journeys: number;
+  total_distance_km: number;
+  total_fuel_liters: number;
+  average_consumption: number;
+  total_fuel_cost: number;
+  cost_per_km: number;
+  maintenance_requests: number;
+}
+export interface VehicleReportPerformanceSummary {
+  vehicle_total_activity: number; // Adicionado
+  period_total_activity: number;  // Renomeado
+  activity_unit: string;          // Renomeado
+  period_total_fuel: number;      // Renomeado
+  average_consumption: number;
+}
+
+export interface DriverPerformanceReport {
+  report_period_start: string; // ou date
+  report_period_end: string; // ou date
+  generated_at: string; // ou date
+  drivers_performance: DriverPerformanceEntry[];
+}
+
+export interface FleetReportSummary {
+  total_cost: number;
+  total_distance_km: number;
+  overall_cost_per_km: number;
+}
+
+export interface VehicleRankingEntry {
+  vehicle_id: number;
+  vehicle_identifier: string;
+  value: number;
+  unit: string;
+}
+
+export interface FleetManagementReport {
+  report_period_start: string; // ou date
+  report_period_end: string; // ou date
+  generated_at: string; // ou date
+  summary: FleetReportSummary;
+  costs_by_category: Record<string, number>;
+  top_5_most_expensive_vehicles: VehicleRankingEntry[];
+  top_5_highest_cost_per_km_vehicles: VehicleRankingEntry[];
+  top_5_most_efficient_vehicles: VehicleRankingEntry[];
+  top_5_least_efficient_vehicles: VehicleRankingEntry[];
 }

@@ -3,68 +3,109 @@
     <h1 class="text-h4 text-weight-bold q-my-md">Central de Relatórios</h1>
 
     <q-card flat bordered>
-      <q-card-section class="row q-col-gutter-md items-center">
-        <div class="col-12 col-md-3">
-          <q-select
-            outlined
-            v-model="filters.reportType"
-            :options="reportOptions"
-            label="1. Selecione o Tipo de Relatório"
-            emit-value
-            map-options
-            dense
-          />
+      <q-card-section>
+        <div class="row q-col-gutter-md items-center">
+          <!-- Filtro 1: Tipo de Relatório -->
+          <div class="col-12 col-md-4">
+            <q-select
+              outlined
+              v-model="filters.reportType"
+              :options="reportOptions"
+              label="1. Selecione o Tipo de Relatório"
+              emit-value
+              map-options
+              dense
+            />
+          </div>
+
+          <!-- Filtro 2: Veículo (Condicional) -->
+          <div v-if="filters.reportType === 'vehicle_consolidated'" class="col-12 col-md-4">
+            <q-select
+              outlined
+              v-model="filters.vehicleId"
+              :options="vehicleOptions"
+              label="2. Selecione o Veículo"
+              emit-value
+              map-options
+              dense
+              use-input
+              @filter="filterVehicles"
+              :loading="vehicleStore.isLoading"
+            >
+              <template v-slot:no-option>
+                <q-item><q-item-section class="text-grey">Nenhum veículo encontrado</q-item-section></q-item>
+              </template>
+            </q-select>
+          </div>
+
+          <!-- Filtro 3: Período -->
+          <div v-if="filters.reportType" class="col-12 col-md-4">
+            <q-input
+              outlined
+              v-model="dateRangeText"
+              :label="filters.reportType === 'vehicle_consolidated' ? '3. Selecione o Período' : '2. Selecione o Período'"
+              readonly
+              dense
+            >
+              <template v-slot:prepend><q-icon name="event" class="cursor-pointer" /></template>
+              <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                <q-date v-model="filters.dateRange" range mask="YYYY-MM-DD" />
+              </q-popup-proxy>
+            </q-input>
+          </div>
         </div>
 
-        <div v-if="filters.reportType === 'vehicle_consolidated'" class="col-12 col-md-3">
-          <q-select
-            outlined
-            v-model="filters.vehicleId"
-            :options="vehicleOptions"
-            label="2. Selecione o Veículo"
-            emit-value
-            map-options
-            dense
-            use-input
-            @filter="filterVehicles"
-            :loading="vehicleStore.isLoading"
-          >
-            <template v-slot:no-option>
-              <q-item><q-item-section class="text-grey">Nenhum veículo encontrado</q-item-section></q-item>
-            </template>
-          </q-select>
-        </div>
-
-        <div v-if="filters.reportType" class="col-12 col-md-4">
-          <q-input
-            outlined
-            v-model="dateRangeText"
-            :label="filters.reportType === 'vehicle_consolidated' ? '3. Selecione o Período' : '2. Selecione o Período'"
-            readonly
-            dense
-          >
-            <template v-slot:prepend><q-icon name="event" class="cursor-pointer" /></template>
-            <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-              <q-date v-model="filters.dateRange" range mask="YYYY-MM-DD" />
-            </q-popup-proxy>
-          </q-input>
-        </div>
-
-        <div class="col-12 col-md-2 text-right">
-          <q-btn
-            @click="generateReport"
-            color="primary"
-            label="Gerar"
-            icon="summarize"
-            unelevated
-            :loading="reportStore.isLoading"
-            :disable="!isFormValid"
-            class="full-width"
-          />
+        <!-- ***** NOVA SEÇÃO: Seleção de Dados do Veículo ***** -->
+        <div v-if="filters.reportType === 'vehicle_consolidated'" class="q-mt-md">
+          <div class="text-subtitle1 q-mb-sm">4. Selecione as seções para incluir:</div>
+          <div class="row q-col-gutter-sm">
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+              <q-checkbox dense v-model="vehicleReportSections.performance_summary" label="Resumo de Performance" />
+            </div>
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+              <q-checkbox dense v-model="vehicleReportSections.financial_summary" label="Resumo Financeiro" />
+            </div>
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+              <q-checkbox dense v-model="vehicleReportSections.costs_detailed" label="Custos Detalhados" />
+            </div>
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+              <q-checkbox dense v-model="vehicleReportSections.fuel_logs_detailed" label="Abastecimentos" />
+            </div>
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+              <q-checkbox dense v-model="vehicleReportSections.maintenance_detailed" label="Manutenções" />
+            </div>
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+              <q-checkbox dense v-model="vehicleReportSections.fines_detailed" label="Multas" />
+            </div>
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+              <q-checkbox dense v-model="vehicleReportSections.journeys_detailed" label="Jornadas" />
+            </div>
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+              <q-checkbox dense v-model="vehicleReportSections.documents_detailed" label="Documentos" />
+            </div>
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+              <q-checkbox dense v-model="vehicleReportSections.tires_detailed" label="Pneus" />
+            </div>
+          </div>
         </div>
       </q-card-section>
+
+      <!-- Botão Gerar -->
+      <q-card-actions class="bg-grey-1 q-pa-md" align="right">
+        <q-btn
+          @click="generateReport"
+          color="primary"
+          label="Gerar Relatório"
+          icon="summarize"
+          unelevated
+          :loading="reportStore.isLoading"
+          :disable="!isFormValid"
+          class="q-px-md"
+        />
+      </q-card-actions>
     </q-card>
 
+    <!-- Área de Exibição dos Relatórios -->
     <div v-if="reportStore.isLoading" class="flex flex-center q-mt-xl">
       <q-spinner-dots color="primary" size="3em" />
       <div class="q-ml-md text-grey">Gerando dados...</div>
@@ -109,6 +150,19 @@ const filters = ref({
   reportType: null as 'vehicle_consolidated' | 'driver_performance' | 'fleet_management' | null,
   vehicleId: null as number | null,
   dateRange: null as { from: string, to: string } | null,
+});
+
+// --- NOVO REF PARA AS SEÇÕES ---
+const vehicleReportSections = ref({
+  performance_summary: true,
+  financial_summary: true,
+  costs_detailed: true,
+  fuel_logs_detailed: true,
+  maintenance_detailed: false,
+  fines_detailed: false,
+  journeys_detailed: false,
+  documents_detailed: false,
+  tires_detailed: false,
 });
 
 watch(() => filters.value.reportType, () => {
@@ -158,6 +212,7 @@ function filterVehicles(val: string, update: (callback: () => void) => void) {
   });
 }
 
+// --- FUNÇÃO ATUALIZADA ---
 async function generateReport() {
   if (!isFormValid.value || !filters.value.dateRange) {
     $q.notify({ type: 'warning', message: 'Por favor, preencha todos os filtros obrigatórios.' });
@@ -167,7 +222,13 @@ async function generateReport() {
   const { from, to } = filters.value.dateRange;
 
   if (filters.value.reportType === 'vehicle_consolidated' && filters.value.vehicleId) {
-    await reportStore.generateVehicleConsolidatedReport(filters.value.vehicleId, from, to);
+    // Passa as seções selecionadas para a store
+    await reportStore.generateVehicleConsolidatedReport(
+      filters.value.vehicleId,
+      from,
+      to,
+      vehicleReportSections.value
+    );
   } else if (filters.value.reportType === 'driver_performance') {
     await reportStore.generateDriverPerformanceReport(from, to);
   } else if (filters.value.reportType === 'fleet_management') {

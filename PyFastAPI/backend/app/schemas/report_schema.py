@@ -5,6 +5,11 @@ from datetime import date, datetime
 from .vehicle_cost_schema import VehicleCostPublic
 from .fuel_log_schema import FuelLogPublic
 from .maintenance_schema import MaintenanceRequestPublic
+# --- NOVOS IMPORTS ---
+from .fine_schema import FinePublic
+from .journey_schema import JourneyPublic
+from .document_schema import DocumentPublic
+from .tire_schema import VehicleTirePublic as TirePublic
 
 # Mantém o schema do dashboard existente
 class DashboardSummary(BaseModel):
@@ -13,41 +18,74 @@ class DashboardSummary(BaseModel):
     total_costs_last_30_days: float
     maintenance_open_requests: int
 
-# --- NOVOS SCHEMAS PARA O RELATÓRIO CONSOLIDADO DE VEÍCULO ---
+# --- NOVOS SCHEMAS PARA O PEDIDO DO RELATÓRIO ---
+
+class VehicleReportSections(BaseModel):
+    """Define quais seções devem ser incluídas no relatório."""
+    performance_summary: bool = True
+    financial_summary: bool = True
+    costs_detailed: bool = True
+    fuel_logs_detailed: bool = True
+    maintenance_detailed: bool = False
+    fines_detailed: bool = False
+    journeys_detailed: bool = False
+    documents_detailed: bool = False
+    tires_detailed: bool = False
+
+class VehicleReportRequest(BaseModel):
+    """Schema para o corpo (body) do pedido do relatório consolidado."""
+    vehicle_id: int
+    start_date: date
+    end_date: date
+    sections: VehicleReportSections
+
+# --- SCHEMAS DE RESPOSTA ATUALIZADOS ---
 
 class VehicleReportPerformanceSummary(BaseModel):
     """Resumo de performance para o relatório."""
-    total_distance_km: float = 0.0
-    total_fuel_liters: float = 0.0
-    average_consumption: float = 0.0 # KM/L ou L/Hora, dependendo do setor
+    # Totais do Veículo
+    vehicle_total_activity: float = 0.0   # <-- CAMPO ADICIONADO
+    
+    # Totais do Período
+    period_total_activity: float = 0.0  # Renomeado de total_activity_value
+    activity_unit: str = "km"           # Renomeado de total_activity_unit
+    period_total_fuel: float = 0.0      # Renomeado de total_fuel_liters
+    average_consumption: float = 0.0
 
 class VehicleReportFinancialSummary(BaseModel):
     """Resumo financeiro para o relatório."""
     total_costs: float = 0.0
-    cost_per_km: float = 0.0
+    cost_per_metric: float = 0.0       # Renomeado de cost_per_km
+    cost_per_metric_unit: str = "km"   # Novo campo
     costs_by_category: Dict[str, float] = {}
 
 class VehicleConsolidatedReport(BaseModel):
     """Schema principal para o Relatório Consolidado de Veículo."""
     # --- Dados de Cabeçalho ---
     vehicle_id: int
-    vehicle_identifier: str # Placa ou Identificador
+    vehicle_identifier: str 
     vehicle_model: str
     report_period_start: date
     report_period_end: date
     generated_at: datetime
 
-    # --- Seções de Dados ---
-    performance_summary: VehicleReportPerformanceSummary
-    financial_summary: VehicleReportFinancialSummary
+    # --- Seções de Dados (Agora Opcionais) ---
+    performance_summary: Optional[VehicleReportPerformanceSummary] = None
+    financial_summary: Optional[VehicleReportFinancialSummary] = None
     
-    # --- Dados Detalhados ---
-    costs_detailed: List[VehicleCostPublic]
-    fuel_logs_detailed: List[FuelLogPublic]
-    maintenance_detailed: List[MaintenanceRequestPublic]
+    # --- Dados Detalhados (Agora Opcionais) ---
+    costs_detailed: Optional[List[VehicleCostPublic]] = None
+    fuel_logs_detailed: Optional[List[FuelLogPublic]] = None
+    maintenance_detailed: Optional[List[MaintenanceRequestPublic]] = None
+    fines_detailed: Optional[List[FinePublic]] = None
+    journeys_detailed: Optional[List[JourneyPublic]] = None
+    documents_detailed: Optional[List[DocumentPublic]] = None
+    tires_detailed: Optional[List[TirePublic]] = None
     
     class Config:
         from_attributes = True
+
+# --- Schemas de outros relatórios (sem alteração) ---
 
 class DriverPerformanceEntry(BaseModel):
     """Representa a linha de dados para um único motorista no relatório."""

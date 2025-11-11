@@ -5,12 +5,19 @@ from jinja2 import Environment, FileSystemLoader
 from xhtml2pdf import pisa
 import io
 from datetime import datetime, date, timedelta
-import logging # <-- Adicione o import de logging
+import logging
 from app import crud
 from app.api import deps
 from app.models.user_model import User, UserRole
 from app.schemas.report_generator_schema import ReportRequest
-from app.schemas.report_schema import DashboardSummary, VehicleConsolidatedReport, DriverPerformanceReport, FleetManagementReport
+# --- IMPORTS ATUALIZADOS ---
+from app.schemas.report_schema import (
+    DashboardSummary, 
+    VehicleConsolidatedReport, 
+    DriverPerformanceReport, 
+    FleetManagementReport,
+    VehicleReportRequest  # <-- Importa o novo schema de request
+)
 
 router = APIRouter()
 
@@ -94,35 +101,39 @@ async def generate_report_pdf(
     else:
         raise HTTPException(status_code=500, detail="Erro ao gerar o PDF.")
     
+
+# --- ENDPOINT ATUALIZADO ---
 @router.post("/vehicle-consolidated", response_model=VehicleConsolidatedReport,
              dependencies=[Depends(deps.check_demo_limit("reports"))])
 async def generate_vehicle_consolidated_report(
     *,
     db: AsyncSession = Depends(deps.get_db),
-    vehicle_id: int = Body(..., embed=True),
-    start_date: date = Body(..., embed=True),
-    end_date: date = Body(..., embed=True),
+    # Alterado para receber o novo schema de request no corpo
+    report_request: VehicleReportRequest = Body(...), 
     current_user: User = Depends(deps.get_current_active_user),
 ):
     """Gera um relatório consolidado com todos os dados de um veículo."""
     try:
+        # Passa os parâmetros do request para o CRUD
         report_data = await crud.report.get_vehicle_consolidated_data(
-            db=db, vehicle_id=vehicle_id, start_date=start_date,
-            end_date=end_date, organization_id=current_user.organization_id
+            db=db,
+            vehicle_id=report_request.vehicle_id,
+            start_date=report_request.start_date,
+            end_date=report_request.end_date,
+            sections=report_request.sections, # <-- Passa as seções selecionadas
+            organization_id=current_user.organization_id
         )
         if current_user.role == UserRole.CLIENTE_DEMO:
             await crud.demo_usage.increment_usage(db, organization_id=current_user.organization_id, resource_type="reports")
         return report_data
     except ValueError as e:
-        # Mude de 404 para 500 e exponha o erro real do CRUD
         logging.error(f"Erro de Valor no CRUD do Relatório: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro Interno ao processar dados do relatório: {e}")
     except Exception as e:
         logging.error(f"Erro Inesperado no Relatório: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ocorreu um erro ao gerar o relatório: {e}")
-# --- FIM DA CORREÇÃO ---
 
-# --- O endpoint de 'dashboard-summary' não é um relatório, então permanece igual ---
+# --- Endpoint de dashboard-summary (sem alteração) ---
 @router.get("/dashboard-summary", response_model=DashboardSummary)
 async def get_dashboard_summary_data(
     db: AsyncSession = Depends(deps.get_db),
