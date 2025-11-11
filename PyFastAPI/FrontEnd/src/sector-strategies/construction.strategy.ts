@@ -16,4 +16,6 @@ export const ConstructionStrategy: ISectorStrategy = {
   journeyHistoryTitle: 'Histórico de Tarefas',
  journeyStartSuccessMessage: 'Tarefa iniciada com sucesso!',
   journeyEndSuccessMessage: 'Tarefa finalizada com sucesso!',
+    odometerLabel: 'Odômetro (KM)',
+
 };

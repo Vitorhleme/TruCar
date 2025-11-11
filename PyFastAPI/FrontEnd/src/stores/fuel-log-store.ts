@@ -1,8 +1,10 @@
+//
+// ARQUIVO: src/stores/fuel-log-store.ts
+//
 import { defineStore } from 'pinia';
 import { api } from 'boot/axios';
 import { Notify } from 'quasar';
-import type { FuelLog, FuelLogCreate } from 'src/models/fuel-log-models';
-
+import type { FuelLog, FuelLogCreate, FuelLogUpdate } from 'src/models/fuel-log-models';
 export const useFuelLogStore = defineStore('fuelLog', {
   state: () => ({
     fuelLogs: [] as FuelLog[],
@@ -17,6 +19,30 @@ export const useFuelLogStore = defineStore('fuelLog', {
         this.fuelLogs = response.data;
       } catch {
         Notify.create({ type: 'negative', message: 'Falha ao carregar registros de abastecimento.' });
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+
+
+    async updateFuelLog(logId: number, payload: FuelLogUpdate) {
+      this.isLoading = true;
+      try {
+        const response = await api.put<FuelLog>(`/fuel-logs/${logId}`, payload);
+        
+        // Atualiza o log na lista local
+        const index = this.fuelLogs.findIndex(log => log.id === logId);
+        if (index !== -1) {
+          this.fuelLogs[index] = response.data;
+        }
+        
+        Notify.create({ type: 'positive', message: 'Registro atualizado com sucesso!' });
+        
+      } catch (error) {
+        Notify.create({ type: 'negative', message: 'Falha ao atualizar o registro.' });
+        console.error('Erro ao atualizar:', error);
+        throw error; // Lança o erro para o componente saber que falhou
       } finally {
         this.isLoading = false;
       }
@@ -37,26 +63,47 @@ export const useFuelLogStore = defineStore('fuelLog', {
     },
 
     /**
-     * [NOVA AÇÃO] Inicia a sincronização com o provedor de combustível.
+     * [AÇÃO EXISTENTE] Inicia a sincronização com o provedor de combustível.
      */
     async syncWithProvider() {
       this.isLoading = true;
       try {
-        // Chama o endpoint de sincronização que criamos no backend
         const response = await api.post<{ message: string }>('/fuel-logs/sync');
         
         Notify.create({
           type: 'positive',
           message: response.data.message || 'Sincronização iniciada.',
-          timeout: 4000 // Aumenta o tempo para o usuário ler a mensagem
+          timeout: 4000
         });
 
-        // Após a sincronização, busca a lista atualizada de abastecimentos
         await this.fetchFuelLogs();
 
       } catch (error) {
         Notify.create({ type: 'negative', message: 'Falha ao sincronizar com o provedor.' });
         console.error('Erro na sincronização:', error);
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // --- NOVA AÇÃO ADICIONADA ---
+    /**
+     * Exclui um registro de abastecimento.
+     */
+    async deleteFuelLog(logId: number) {
+      this.isLoading = true;
+      try {
+        // Chama o endpoint DELETE que criamos no backend
+        await api.delete(`/fuel-logs/${logId}`);
+        
+        // Remove o log da lista no estado
+        this.fuelLogs = this.fuelLogs.filter(log => log.id !== logId);
+        
+        Notify.create({ type: 'positive', message: 'Registro excluído com sucesso!' });
+        
+      } catch (error) {
+        Notify.create({ type: 'negative', message: 'Falha ao excluir o registro.' });
+        console.error('Erro ao excluir:', error);
       } finally {
         this.isLoading = false;
       }

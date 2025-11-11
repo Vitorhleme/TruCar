@@ -15,6 +15,7 @@ export interface ISectorStrategy {
   journeyHistoryTitle: string;
     journeyStartSuccessMessage: string;
       journeyEndSuccessMessage: string;
+      odometerLabel: string;
 
 
 }

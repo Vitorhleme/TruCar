@@ -1,6 +1,6 @@
 
 // O tipo 'UserRole' é importado implicitamente através do tipo 'User'
-type UserRole = User['role'];
+export type UserRole = User['role'];
 
 // Usado ao criar um novo utilizador
 export interface UserCreate {

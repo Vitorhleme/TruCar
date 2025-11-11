@@ -14,7 +14,7 @@ class FuelLogBase(BaseModel):
     receipt_photo_url: Optional[str] = None
 
 class FuelLogCreate(FuelLogBase):
-    pass
+    user_id: Optional[int] = None  # <-- ADICIONE ESTA LINHA
 
 class FuelLogUpdate(BaseModel):
     odometer: Optional[int] = None

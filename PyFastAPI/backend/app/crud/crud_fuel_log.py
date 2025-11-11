@@ -58,13 +58,22 @@ async def check_abnormal_consumption(db: AsyncSession, *, fuel_log: FuelLog, veh
 
 async def create_fuel_log(db: AsyncSession, *, log_in: FuelLogCreate, user_id: int, organization_id: int) -> FuelLog:
     """Cria um novo registo de abastecimento manual e um custo associado."""
-    db_obj = FuelLog(**log_in.model_dump(), user_id=user_id, organization_id=organization_id)
+    
+    # --- ESTA É A LINHA CORRIGIDA ---
+    # Nós excluímos o 'user_id' do 'log_in' para evitar o argumento duplicado.
+    db_obj = FuelLog(
+        **log_in.model_dump(exclude={"user_id"}), 
+        user_id=user_id, 
+        organization_id=organization_id
+    )
+    # --- FIM DA CORREÇÃO ---
+
     db.add(db_obj)
     await db.flush()  # Garante que o db_obj tenha um ID antes de usá-lo
 
     # --- LÓGICA ADICIONADA ---
     # Cria um custo correspondente do tipo "Combustível"
-    cost_obj_in = VehicleCostCreate(
+    cost_obj_in = VehicleCostCreate( #
         description=f"Abastecimento em {db_obj.timestamp.strftime('%d/%m/%Y')}",
         amount=db_obj.total_cost,
         date=db_obj.timestamp.date(),
@@ -72,7 +81,7 @@ async def create_fuel_log(db: AsyncSession, *, log_in: FuelLogCreate, user_id: i
     )
     
     # Reutiliza o CRUD de custos para criar o novo registro de custo
-    await crud.vehicle_cost.create_cost(
+    await crud.vehicle_cost.create_cost( #
         db, 
         obj_in=cost_obj_in, 
         vehicle_id=db_obj.vehicle_id, 
@@ -116,10 +125,23 @@ async def update_fuel_log(db: AsyncSession, *, db_obj: FuelLog, obj_in: FuelLogU
     update_data = obj_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_obj, field, value)
+    
     db.add(db_obj)
     await db.commit()
-    await db.refresh(db_obj)
+    
+    # --- A CORREÇÃO É AQUI ---
+    # Nós precisamos recarregar o 'db_obj' E suas relações 'user' e 'vehicle'
+    # para que o Pydantic (FastAPI) possa validá-lo com o response_model 'FuelLogPublic'.
+    
+    # Antes (Errado):
+    # await db.refresh(db_obj)
+    
+    # Depois (Correto):
+    await db.refresh(db_obj, ["user", "vehicle"])
+    # --- FIM DA CORREÇÃO ---
+
     return db_obj
+# --- FIM DA FUNÇÃO ---
 
 async def remove_fuel_log(db: AsyncSession, *, db_obj: FuelLog) -> FuelLog:
     await db.delete(db_obj)

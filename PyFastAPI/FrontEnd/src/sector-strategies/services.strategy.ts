@@ -17,6 +17,6 @@ export const ServicesStrategy: ISectorStrategy = {
   journeyHistoryTitle: 'Histórico de Viagens',
     journeyStartSuccessMessage: 'Operação iniciada com sucesso!',
       journeyEndSuccessMessage: 'Operação finalizada com sucesso!',
-
+  odometerLabel: 'Odômetro (KM)',
 
 };

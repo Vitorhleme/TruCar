@@ -1,3 +1,5 @@
+// ARQUIVO: src/models/fuel-log-models.ts
+
 import type { User } from './auth-models';
 import type { Vehicle } from './vehicle-models';
 
@@ -30,3 +32,12 @@ export interface FuelLogCreate {
   receipt_photo_url?: string | null;
 }
 
+// --- INTERFACE ADICIONADA ---
+// Todos os campos são opcionais para a atualização (PUT/PATCH)
+export interface FuelLogUpdate {
+  vehicle_id?: number;
+  odometer?: number;
+  liters?: number;
+  total_cost?: number;
+  receipt_photo_url?: string | null;
+}

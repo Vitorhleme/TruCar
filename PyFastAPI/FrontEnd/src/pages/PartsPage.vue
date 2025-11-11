@@ -287,11 +287,12 @@ async function handleSubmit() {
   }
   
   // Remove 'stock' pois não é enviado
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   delete (payload as any).stock; 
   
   const success = isEditing.value && editingPart.value
     ? await partStore.updatePart(editingPart.value.id, payload)
-    : await partStore.createPart(payload);
+    : await partStore.createPart(payload); // <--- 'payload' ainda tem 'stock' na sua definição de tipo
   
   if (success) {
     isDialogOpen.value = false;

@@ -49,6 +49,7 @@ export const useTerminologyStore = defineStore('terminology', {
     journeyHistoryTitle(): string { return this.activeStrategy.journeyHistoryTitle; },
     journeyStartSuccessMessage(): string { return this.activeStrategy.journeyStartSuccessMessage; },
     journeyEndSuccessMessage(): string { return this.activeStrategy.journeyEndSuccessMessage; },
+    odometerLabel(): string { return this.activeStrategy.odometerLabel; },
   },
 
   actions: {

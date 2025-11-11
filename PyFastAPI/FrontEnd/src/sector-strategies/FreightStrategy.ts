@@ -16,4 +16,5 @@ export const FreightStrategy: ISectorStrategy = {
   journeyHistoryTitle: 'Histórico de Fretes',
   journeyStartSuccessMessage: 'Frete iniciado com sucesso!',
   journeyEndSuccessMessage: 'Frete finalizado com sucesso!',
+  odometerLabel: 'Odômetro (KM)',
 };

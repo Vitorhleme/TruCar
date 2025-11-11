@@ -16,4 +16,6 @@ export const AgroStrategy: ISectorStrategy = {
   journeyHistoryTitle: 'Histórico de Operações',
   journeyStartSuccessMessage: 'Operação iniciada com sucesso!',
   journeyEndSuccessMessage: 'Operação finalizada com sucesso!',
+    odometerLabel: 'Horímetro',
+
 };
