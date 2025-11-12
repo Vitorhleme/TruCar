@@ -40,9 +40,9 @@ O projeto TruCar possui uma arquitetura flexível, consistindo em um frontend mo
         |   (Python/FastAPI)|                       |      (Go/Gin)     |
         |                   |                       |                   |
         +-------------------+                       +-------------------+
-<img width="11480" height="2268" alt="Untitled diagram-2025-11-12-165423" src="https://github.com/user-attachments/assets/e4ea8217-9d77-421f-8262-77a1b10ea0c6" />
 
 ```
+<img width="11480" height="2268" alt="Untitled diagram-2025-11-12-165423" src="https://github.com/user-attachments/assets/e4ea8217-9d77-421f-8262-77a1b10ea0c6" />
 
 
 
