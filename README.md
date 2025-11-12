@@ -22,6 +22,91 @@ A plataforma TruCar oferece uma ampla gama de funcionalidades para auxiliar no g
 O projeto TruCar possui uma arquitetura flexível, consistindo em um frontend moderno e duas opções de backend para diferentes necessidades de performance e desenvolvimento.
 
 ```
+
+graph TD
+    subgraph "Cliente (Utilizador)"
+        U[Browser/App Móvel (Quasar/Vue.js)]
+    end
+
+    subgraph "Edge & Entrega de Conteúdo"
+        CDN[CDN (ex: Cloudflare, AWS CloudFront)]
+        LB[Load Balancer (ex: Nginx, AWS ALB)]
+    end
+
+    subgraph "Plataforma de Microserviços"
+        GW[API Gateway (ex: Kong, Traefik)]
+
+        subgraph "Serviços Centrais"
+            AuthSvc[Serviço de Autenticação (OAuth2/JWT)]
+            NotificationSvc[Serviço de Notificações (Email/Push)]
+        end
+
+        subgraph "Microsserviço: 'Core' (Python)"
+            BE_Py[Backend (Python/FastAPI)\n- Gestão de Utilizadores\n- Gestão de Veículos\n- Frotas]
+            DB_Py[Base de Dados SQL (ex: PostgreSQL)]
+        end
+
+        subgraph "Microsserviço: 'Telemetria' (Go)"
+            BE_Go[Backend (Go/Gin)\n- Ingestão de GPS\n- Processamento de Eventos]
+            DB_Go[Base de Dados Time-Series (ex: InfluxDB, TimescaleDB)]
+        end
+
+        subgraph "Serviços de Suporte"
+            Cache[Cache Distribuída (ex: Redis)]
+            Broker[Message Broker (ex: RabbitMQ, Kafka)]
+            Storage[Object Storage (ex: MinIO, AWS S3)]
+        end
+
+        subgraph "Observabilidade"
+            Logging[Sistema de Logging (ex: ELK Stack)]
+            Metrics[Sistema de Métricas (ex: Prometheus)]
+            Tracing[Tracing Distribuído (ex: Jaeger)]
+            Dashboard[Dashboard (ex: Grafana)]
+        end
+    end
+
+    subgraph "Serviços Externos (APIs de Terceiros)"
+        EmailAPI[API de Email (ex: SendGrid)]
+        MapsAPI[API de Mapas/Geocoding (ex: Google Maps)]
+        PaymentAPI[Gateway de Pagamento (ex: Stripe)]
+    end
+
+    %% Fluxos de Interação
+    U -- Conteúdo Estático --> CDN
+    CDN -- Cache Miss --> Storage
+    U -- Pedidos API --> LB
+    LB --> GW
+
+    GW -- Validação de Token --> AuthSvc
+    GW -- Rotas (ex: /users, /vehicles) --> BE_Py
+    GW -- Rotas (ex: /telemetry, /realtime) --> BE_Go
+    GW -- Rotas (ex: /notifications) --> NotificationSvc
+
+    BE_Py -- Lê/Escreve --> DB_Py
+    BE_Py -- Cache de Sessão/Dados --> Cache
+    BE_Py -- Publica Eventos (ex: 'veiculo_criado') --> Broker
+    BE_Py -- Lê/Escreve Ficheiros (ex: Docs, Fotos) --> Storage
+    BE_Py -- Envia Métricas --> Metrics
+    BE_Py -- Envia Logs --> Logging
+    BE_Py -- Gera Traces --> Tracing
+    
+    BE_Go -- Lê/Escreve (Lotes) --> DB_Go
+    BE_Go -- Cache de Posições Recentes --> Cache
+    BE_Go -- Publica Eventos (ex: 'alerta_velocidade') --> Broker
+    BE_Go -- Envia Métricas --> Metrics
+    BE_Go -- Envia Logs --> Logging
+    BE_Go -- Gera Traces --> Tracing
+
+    NotificationSvc -- Subscreve Eventos --> Broker
+    NotificationSvc -- Envia Email --> EmailAPI
+
+    BE_Go -- Pede Geocoding --> MapsAPI
+    BE_Py -- Processa Faturas --> PaymentAPI
+    
+    Metrics --> Dashboard
+    Logging --> Dashboard
+    Tracing --> Dashboard
+
                                +-----------------+
                                |                 |
                                |     Frontend    |
