@@ -1,46 +1,43 @@
-# Em backend/app/crud/crud_fine.py
-
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from datetime import date  # <-- 1. Importar 'date' para conversão
 
-from app.models.fine_model import Fine
+from app.models.fine_model import Fine, FineStatus
+from app.models.vehicle_cost_model import VehicleCost, CostType
 from app.schemas.fine_schema import FineCreate, FineUpdate
-from app.schemas.vehicle_cost_schema import VehicleCostCreate
-from app.models.vehicle_cost_model import CostType
-from . import crud_vehicle_cost
 
+
+# (As funções create, get, get_multi_by_org, get_multi_by_driver não precisam de mudança)
+# Vamos pular para a função 'update'
 
 async def create(db: AsyncSession, *, fine_in: FineCreate, organization_id: int) -> Fine:
-    """Cria uma nova multa e, simultaneamente, cria um lançamento de custo correspondente."""
-    db_fine = Fine(**fine_in.model_dump(), organization_id=organization_id)
-    db.add(db_fine)
+    """Cria uma nova multa e seu custo vinculado de forma simples."""
     
-    # Cria o custo provisionado no momento em que a multa é registrada
-    cost_payload = VehicleCostCreate(
+    db_fine = Fine(**fine_in.model_dump(), organization_id=organization_id)
+    
+    db_cost = VehicleCost(
         description=f"Multa: {db_fine.description}",
         amount=db_fine.value,
         date=db_fine.date,
-        cost_type=CostType.MULTA
-    )
-    # Chama o CRUD de custos, mas não faz o commit final aqui
-    await crud_vehicle_cost.create_cost(
-        db=db,
-        obj_in=cost_payload,
+        cost_type=CostType.MULTA,
         vehicle_id=db_fine.vehicle_id,
-        organization_id=organization_id,
-        commit=False 
+        organization_id=organization_id
     )
+
+    db_fine.cost = db_cost 
     
-    await db.commit() # O commit salva tanto a multa quanto o custo
-    await db.refresh(db_fine, ["vehicle", "driver"])
+    db.add(db_fine)
     
     return db_fine
 
 async def get(db: AsyncSession, *, fine_id: int, organization_id: int) -> Optional[Fine]:
-    """Busca uma multa específica pelo ID, garantindo que pertence à organização."""
-    stmt = select(Fine).where(Fine.id == fine_id, Fine.organization_id == organization_id).options(
+    """Busca uma multa específica pelo ID, garantindo que pertence à organização e carregando o custo."""
+    stmt = select(Fine).where(Fine.id == fine_id, Fine.organization_id == organization_id)
+    # 'lazy="selectin"' no modelo fine_model.py já deve cuidar de carregar o custo
+    # Mas podemos garantir o 'vehicle' e 'driver' aqui
+    stmt = stmt.options(
         selectinload(Fine.vehicle),
         selectinload(Fine.driver)
     )
@@ -62,7 +59,6 @@ async def get_multi_by_org(
     result = await db.execute(stmt)
     return result.scalars().all()
 
-# --- NOVA FUNÇÃO ADICIONADA ---
 async def get_multi_by_driver(
     db: AsyncSession, *, driver_id: int, organization_id: int, skip: int = 0, limit: int = 100
 ) -> List[Fine]:
@@ -77,20 +73,72 @@ async def get_multi_by_driver(
     )
     result = await db.execute(stmt)
     return result.scalars().all()
-# --- FIM DA ADIÇÃO ---
 
-async def update(db: AsyncSession, *, db_fine: Fine, fine_in: FineUpdate) -> Fine:
-    """Atualiza os dados de uma multa."""
-    update_data = fine_in.model_dump(exclude_unset=True)
+
+async def update(
+    db: AsyncSession, 
+    *, 
+    db_fine: Fine, 
+    fine_in_dict: Dict[str, Any]
+) -> Fine:
+    """Atualiza os dados de uma multa e seu custo associado (usando um dict)."""
+    
+    update_data = fine_in_dict
+    
+    # --- 2. CORREÇÃO DE TIPO (O PROBLEMA ESTÁ AQUI) ---
+    # O JSON nos dá 'date' como a string "2025-11-12".
+    # SQLAlchemy espera um objeto datetime.date.
+    if 'date' in update_data and isinstance(update_data['date'], str):
+        try:
+            # Converte a string "YYYY-MM-DD" em um objeto date
+            update_data['date'] = date.fromisoformat(update_data['date'])
+        except (ValueError, TypeError):
+            # Se o formato for inválido ou nulo, remove para não quebrar
+            del update_data['date']
+
+    # O JSON nos dá 'status' como a string "Pendente".
+    # SQLAlchemy espera o Enum FineStatus.PENDING.
+    if 'status' in update_data and isinstance(update_data['status'], str):
+        try:
+            # Converte a string "Pendente" de volta para o objeto Enum
+            update_data['status'] = FineStatus(update_data['status'])
+        except ValueError:
+            # Se o status enviado ("MeuStatus") não existir no Enum, remove
+            del update_data['status']
+    # --- FIM DA CORREÇÃO ---
+
+    
+    # 1. Atualiza os campos da multa (agora com os tipos corretos)
     for field, value in update_data.items():
-        setattr(db_fine, field, value)
-    db.add(db_fine)
-    await db.commit()
-    await db.refresh(db_fine, ["vehicle", "driver"])
+        if hasattr(db_fine, field):
+            setattr(db_fine, field, value)
+        
+    # 2. Atualiza os campos do custo vinculado (agora com tipos corretos)
+    if db_fine.cost:
+        if 'description' in update_data:
+            db_fine.cost.description = f"Multa: {update_data['description']}"
+        if 'value' in update_data:
+            db_fine.cost.amount = update_data['value']
+        if 'date' in update_data:
+            # update_data['date'] já é um objeto date aqui
+            db_fine.cost.date = update_data['date']
+        if 'vehicle_id' in update_data:
+            db_fine.cost.vehicle_id = update_data['vehicle_id']
+        
+        db.add(db_fine.cost) # Adiciona o custo atualizado à sessão
+
+    db.add(db_fine) # Adiciona a multa atualizada à sessão
+    
+    # O endpoint fará o commit e refresh
     return db_fine
 
+
 async def remove(db: AsyncSession, *, db_fine: Fine) -> Fine:
-    """Remove uma multa do banco de dados."""
+    """
+    Remove uma multa do banco de dados. 
+    O custo associado será removido AUTOMATICAMENTE pelo 'cascade'.
+    """
     await db.delete(db_fine)
-    await db.commit()
+    
+    # O endpoint fará o commit
     return db_fine

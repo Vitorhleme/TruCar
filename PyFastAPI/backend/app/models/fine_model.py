@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from .user_model import User
     from .vehicle_model import Vehicle
     from .organization_model import Organization
+    from .vehicle_cost_model import VehicleCost  # <-- Importar o Custo
 
 class FineStatus(str, enum.Enum):
     PENDING = "Pendente"
@@ -20,7 +21,6 @@ class FineStatus(str, enum.Enum):
 class Fine(Base):
     __tablename__ = "fines"
 
-    # --- COLUNAS E RELAÇÕES ATUALIZADAS PARA A SINTAXE MODERNA ---
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     description: Mapped[str] = mapped_column(String(255), nullable=False)
     infraction_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -38,3 +38,14 @@ class Fine(Base):
     organization: Mapped["Organization"] = relationship("Organization")
     vehicle: Mapped["Vehicle"] = relationship("Vehicle", back_populates="fines")
     driver: Mapped[Optional["User"]] = relationship("User", back_populates="fines")
+    
+    # --- ADIÇÃO DA LIGAÇÃO DIRETA ---
+    # Isso permite acessar o custo via `fine.cost`
+    # cascade="all, delete-orphan": Se a multa for deletada, o custo também será.
+    cost: Mapped[Optional["VehicleCost"]] = relationship(
+        "VehicleCost",
+        back_populates="fine",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin"  # Carrega o custo junto com a multa
+    )
