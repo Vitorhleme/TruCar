@@ -40,7 +40,11 @@ O projeto TruCar possui uma arquitetura flexível, consistindo em um frontend mo
         |   (Python/FastAPI)|                       |      (Go/Gin)     |
         |                   |                       |                   |
         +-------------------+                       +-------------------+
+<img width="11480" height="2268" alt="Untitled diagram-2025-11-12-165423" src="https://github.com/user-attachments/assets/e4ea8217-9d77-421f-8262-77a1b10ea0c6" />
+
 ```
+
+
 
 - **Frontend:** Uma aplicação web que fornece a interface do usuário para a plataforma, construída com Quasar/Vue.js, garantindo uma experiência de usuário rica e reativa.
 - **Backend (Python/FastAPI):** Uma API robusta construída com FastAPI, ideal para desenvolvimento rápido, flexibilidade e um ecossistema Python maduro. É responsável por toda a lógica de negócios e processamento de dados.
