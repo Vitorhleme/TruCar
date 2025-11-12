@@ -65,9 +65,6 @@ Esta seção fornece instruções sobre como configurar e executar o projeto Tru
    ```bash
    python -m venv venv
    .\venv\scripts\activate
-
-   ```bash
-   python -m uvicorn main:app --reload
    ```
 
 3. Instale os pacotes Python necessários:
@@ -77,14 +74,20 @@ Esta seção fornece instruções sobre como configurar e executar o projeto Tru
 
 4. Execute as migrações do banco de dados:
    
-   Instale PostgreSQL 17 e crie um banco de dados com o nome frota_agil.
+   Instale PostgreSQL 17 e crie um banco de dados com o nome Trucar.
    
    ```bash
    alembic revision --autogenerate
    alembic upgrade head
    ```
 
-5. Rode o servidor
+   Ou
+
+   ```Bash
+   python -m app.db.initial_data
+   ```
+
+6. Rode o servidor
 
   ```bash
   uvicorn main:app --reload
@@ -124,30 +127,6 @@ Esta seção fornece instruções sobre como configurar e executar o projeto Tru
 ## Documentação da API
 
 O backend do TruCar expõe uma API REST para gerenciamento da plataforma. A URL base da API é `http://127.0.0.1:8000/api/v1`.
-
-### Telemetria
-
-Este endpoint é usado para reportar dados de telemetria de um veículo.
-
-- **URL:** `/telemetry/report`
-- **Método:** `POST`
-- **Corpo da Requisição:**
-
-  O corpo da requisição deve ser um objeto JSON com a seguinte estrutura:
-
-  ```json
-  {
-    "device_id": "string",
-    "timestamp": "string (formato ISO 8601)",
-    "latitude": "float",
-    "longitude": "float",
-    "engine_hours": "float"
-  }
-  ```
-
-- **Resposta:**
-  - **204 No Content:** Os dados de telemetria foram recebidos e processados com sucesso.
-  - **422 Unprocessable Entity:** O corpo da requisição é inválido.
 
 ## Tecnologias Utilizadas
 
