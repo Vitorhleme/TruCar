@@ -17,10 +17,6 @@ logger = logging.getLogger(__name__)
 # --- LOG DE INICIALIZAÇÃO ---
 # Este log DEVE aparecer no console QUANDO O SERVIDOR INICIAR.
 # Se ele não aparecer, o Uvicorn não está recarregando seus arquivos.
-logger.warning("="*50)
-logger.warning("ARQUIVO 'fines.py' CARREGADO PELO SERVIDOR")
-logger.warning("Schema FineUpdate importado: %s", FineUpdate.model_json_schema())
-logger.warning("="*50)
 # --- FIM DO LOG DE INICIALIZAÇÃO ---
 
 
@@ -63,7 +59,6 @@ async def create_fine(
     current_user: User = Depends(deps.get_current_active_user)
 ):
     """Cria uma nova multa e notifica os gestores em segundo plano."""
-    logger.info(f"Iniciando create_fine pelo usuário: {current_user.email}")
     if current_user.role == UserRole.DRIVER and fine_in.driver_id != current_user.id:
         logger.warning(f"Tentativa FORBIDDEN de criar multa para outro driver. User: {current_user.id}, Tentativa: {fine_in.driver_id}")
         raise HTTPException(
@@ -81,7 +76,6 @@ async def create_fine(
         
         await db.flush()
         await db.refresh(fine)
-        logger.info(f"Multa ID {fine.id} criada (pré-commit), agendando notificação.")
 
         background_tasks.add_task(
             create_notification_background,
@@ -96,7 +90,6 @@ async def create_fine(
         
         await db.commit()
         await db.refresh(fine, ["vehicle", "driver", "cost"])
-        logger.info(f"Multa ID {fine.id} commitada com sucesso.")
         
         return fine
     except Exception as e:
@@ -150,29 +143,22 @@ async def update_fine(
         logger.error(f"Erro ao ATUALIZAR multa ID {fine_id}: Payload não é um JSON válido.")
         raise HTTPException(status_code=400, detail="Payload JSON inválido.")
     
-    logger.info(f"Iniciando update_fine (BYPASS) para a multa ID: {fine_id} pelo usuário: {current_user.email}")
-    logger.info(f"Payload (dicionário) recebido: {payload_dict}")
     # --- FIM DA LEITURA MANUAL ---
 
     try:
-        logger.info(f"Buscando multa ID {fine_id} no banco...")
         db_fine = await crud.fine.get(db, fine_id=fine_id, organization_id=current_user.organization_id)
         if not db_fine:
             logger.error(f"Tentativa de update falhou: Multa ID {fine_id} não encontrada para a org {current_user.organization_id}")
             raise HTTPException(status_code=404, detail="Multa não encontrada.")
         
-        logger.info(f"Multa ID {fine_id} encontrada. Chamando crud.fine.update...")
         
         # 5. Passar o dicionário 'payload_dict' para o CRUD
         fine = await crud.fine.update(db=db, db_fine=db_fine, fine_in_dict=payload_dict)
         
-        logger.info(f"CRUD update para ID {fine_id} finalizado. Commitando transação...")
         await db.commit()
         
-        logger.info(f"Commit para ID {fine_id} realizado. Refrescando objeto...")
         await db.refresh(fine, ["vehicle", "driver", "cost"])
         
-        logger.info(f"Update da multa ID {fine_id} finalizado com sucesso.")
         return fine
     except Exception as e:
         logger.error(f"Erro ao ATUALIZAR multa ID {fine_id}: {e}", exc_info=True)
@@ -187,20 +173,16 @@ async def delete_fine(
     current_user: User = Depends(deps.get_current_active_manager)
 ):
     """Deleta uma multa e seu custo associado (Apenas Gestores)."""
-    logger.info(f"Iniciando delete_fine para a multa ID: {fine_id} pelo usuário: {current_user.email}")
     try:
         db_fine = await crud.fine.get(db, fine_id=fine_id, organization_id=current_user.organization_id)
         if not db_fine:
             logger.error(f"Tentativa de delete falhou: Multa ID {fine_id} não encontrada para a org {current_user.organization_id}")
             raise HTTPException(status_code=404, detail="Multa não encontrada.")
         
-        logger.info(f"Multa ID {fine_id} encontrada. Chamando crud.fine.remove...")
         await crud.fine.remove(db=db, db_fine=db_fine)
         
-        logger.info(f"CRUD remove para ID {fine_id} finalizado. Commitando transação...")
         await db.commit()
         
-        logger.info(f"Delete da multa ID {fine_id} finalizado com sucesso.")
         return
     except Exception as e:
         logger.error(f"Erro ao DELETAR multa ID {fine_id}: {e}", exc_info=True)

@@ -65,9 +65,6 @@ async def create_document(
         organization_id=current_user.organization_id, file_url=file_url
     )
     
-    if current_user.role == UserRole.CLIENTE_DEMO:
-        await crud.demo_usage.increment_usage(db, organization_id=current_user.organization_id, resource_type="documents")
-
     return created_document
 
 

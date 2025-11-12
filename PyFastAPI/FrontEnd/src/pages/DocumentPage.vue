@@ -42,10 +42,10 @@
 
         <!-- Template para a coluna de Ações -->
         <template v-slot:body-cell-actions="props">
-          <q-td :props="props" class="q-gutter-sm">
-            <q-btn :href="props.row.file_url" target="_blank" dense flat round color="primary" icon="visibility">
-              <q-tooltip>Ver Documento</q-tooltip>
-            </q-btn>
+<q-td :props="props" class="q-gutter-sm">
+<q-btn :href="`${backendBaseUrl}${props.row.file_url}`" target="_blank" dense flat round color="primary" icon="visibility">
+ <q-tooltip>Ver Documento</q-tooltip>
+</q-btn>
             <q-btn dense flat round color="negative" icon="delete" @click="confirmDelete(props.row)">
               <q-tooltip>Remover</q-tooltip>
             </q-btn>
@@ -104,16 +104,19 @@
               v-model="newDocument.expiry_date"
               label="Data de Vencimento"
               mask="####-##-##"
-              :rules="['date']"
+              :rules="[
+                val => !!val || 'Campo obrigatório',
+                val => /^\d{4}-\d{2}-\d{2}$/.test(val) || 'Formato de data inválido'
+              ]"
             >
               <template v-slot:append>
                 <q-icon name="event" class="cursor-pointer">
                   <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-date v-model="newDocument.expiry_date">
-                      <div class="row items-center justify-end">
-                        <q-btn v-close-popup label="Fechar" color="primary" flat />
-                      </div>
-                    </q-date>
+                    <q-date v-model="newDocument.expiry_date" mask="YYYY-MM-DD">
+                    <div class="row items-center justify-end">
+                      <q-btn v-close-popup label="Fechar" color="primary" flat />
+                    </div>
+                  </q-date>
                   </q-popup-proxy>
                 </q-icon>
               </template>
@@ -155,8 +158,12 @@ import { useUserStore } from 'stores/user-store';
 import type { DocumentPublic } from 'src/models/document-models';
 import type { User } from 'src/models/auth-models';
 import { format, parseISO, differenceInDays } from 'date-fns';
+import { api } from 'boot/axios'; // <--- ADICIONE ESTA LINHA
+
 
 const $q = useQuasar();
+const baseUrl = api.defaults.baseURL || '';
+const backendBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 const documentStore = useDocumentStore();
 const vehicleStore = useVehicleStore();
 const userStore = useUserStore();
