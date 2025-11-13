@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 # ... (imports)
 from app.schemas.telemetry_schema import TelemetryPayload
-from app.api import deps
+from app import deps
 from sqlalchemy.ext.asyncio import AsyncSession
 from app import crud # <-- CAMINHO CORRETO
 

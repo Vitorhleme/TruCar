@@ -4,8 +4,7 @@ from typing import List
 from datetime import date
 from app.models.notification_model import NotificationType
 
-from app import crud
-from app.api import deps
+from app import crud, deps
 from app.models.user_model import User, UserRole
 from app.schemas.journey_schema import JourneyCreate, JourneyUpdate, JourneyPublic, EndJourneyResponse
 from app.crud.crud_journey import VehicleNotAvailableError # Importa a exceção customizada

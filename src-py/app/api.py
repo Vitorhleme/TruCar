@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 # Importamos todos os endpoints de uma só vez para melhor organização
-from app.api.v1.endpoints import (
+from app.v1.endpoints import (
     admin,
     clients,
     dashboard,

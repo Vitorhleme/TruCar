@@ -4,9 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict
 
-from app.api.deps import DEMO_TOTAL_LIMITS, DEMO_MONTHLY_LIMITS
-from app import crud
-from app.api import deps
+from app import crud, deps
 from app.models.user_model import User, UserRole
 
 # --- CORREÇÃO: Importar a INSTÂNCIA 'demo_usage' diretamente ---
@@ -187,7 +185,7 @@ async def read_demo_stats_rebuilt(
 
     # Busca contagens mensais
     monthly_usage: Dict[str, int] = {}
-    for resource_type in DEMO_MONTHLY_LIMITS.keys():
+    for resource_type in deps.DEMO_MONTHLY_LIMITS.keys():
         # --- CORREÇÃO: Usando a instância importada diretamente ---
         usage = await crud_demo_usage_instance.get_or_create_usage(
             db, organization_id=org_id, resource_type=resource_type
@@ -196,14 +194,14 @@ async def read_demo_stats_rebuilt(
         monthly_usage[resource_type] = usage.usage_count
 
     return DemoStatsResponse(
-        vehicles=DemoResourceLimit(current=vehicle_count, limit=DEMO_TOTAL_LIMITS.get("vehicles", 0)),
-        users=DemoResourceLimit(current=user_count, limit=DEMO_TOTAL_LIMITS.get("users", 0)),
-        parts=DemoResourceLimit(current=part_count, limit=DEMO_TOTAL_LIMITS.get("parts", 0)),
-        clients=DemoResourceLimit(current=client_count, limit=DEMO_TOTAL_LIMITS.get("clients", 0)),
-        reports=DemoResourceLimit(current=monthly_usage.get("reports", 0), limit=DEMO_MONTHLY_LIMITS.get("reports", 0)),
-        fines=DemoResourceLimit(current=monthly_usage.get("fines", 0), limit=DEMO_MONTHLY_LIMITS.get("fines", 0)),
-        documents=DemoResourceLimit(current=monthly_usage.get("documents", 0), limit=DEMO_MONTHLY_LIMITS.get("documents", 0)),
-        freight_orders=DemoResourceLimit(current=monthly_usage.get("freight_orders", 0), limit=DEMO_MONTHLY_LIMITS.get("freight_orders", 0)),
-        maintenance_requests=DemoResourceLimit(current=monthly_usage.get("maintenance_requests", 0), limit=DEMO_MONTHLY_LIMITS.get("maintenance_requests", 0)), # CORRIGIDO: chave 'maintenance_requests'
-        fuel_logs=DemoResourceLimit(current=monthly_usage.get("fuel_logs", 0), limit=DEMO_MONTHLY_LIMITS.get("fuel_logs", 0)),
+        vehicles=DemoResourceLimit(current=vehicle_count, limit=deps.DEMO_TOTAL_LIMITS.get("vehicles", 0)),
+        users=DemoResourceLimit(current=user_count, limit=deps.DEMO_TOTAL_LIMITS.get("users", 0)),
+        parts=DemoResourceLimit(current=part_count, limit=deps.DEMO_TOTAL_LIMITS.get("parts", 0)),
+        clients=DemoResourceLimit(current=client_count, limit=deps.DEMO_TOTAL_LIMITS.get("clients", 0)),
+        reports=DemoResourceLimit(current=monthly_usage.get("reports", 0), limit=deps.DEMO_MONTHLY_LIMITS.get("reports", 0)),
+        fines=DemoResourceLimit(current=monthly_usage.get("fines", 0), limit=deps.DEMO_MONTHLY_LIMITS.get("fines", 0)),
+        documents=DemoResourceLimit(current=monthly_usage.get("documents", 0), limit=deps.DEMO_MONTHLY_LIMITS.get("documents", 0)),
+        freight_orders=DemoResourceLimit(current=monthly_usage.get("freight_orders", 0), limit=deps.DEMO_MONTHLY_LIMITS.get("freight_orders", 0)),
+        maintenance_requests=DemoResourceLimit(current=monthly_usage.get("maintenance_requests", 0), limit=deps.DEMO_MONTHLY_LIMITS.get("maintenance_requests", 0)), # CORRIGIDO: chave 'maintenance_requests'
+        fuel_logs=DemoResourceLimit(current=monthly_usage.get("fuel_logs", 0), limit=deps.DEMO_MONTHLY_LIMITS.get("fuel_logs", 0)),
     )

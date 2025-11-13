@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import crud, models
-from app.api import deps
+from app import crud, models, deps
 from app.schemas.tire_schema import TireLayoutResponse, TireInstall, TireRemove, VehicleTireHistory
 
 router = APIRouter()

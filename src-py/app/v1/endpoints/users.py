@@ -5,7 +5,7 @@ from typing import List
 from app import crud
 from app.schemas.user_schema import UserCreate, UserUpdate, UserPublic, UserStats, UserPasswordUpdate, UserNotificationPrefsUpdate
 from app.core.security import verify_password
-from app.api import deps
+from app import deps
 from app.models.user_model import User, UserRole
 
 router = APIRouter()

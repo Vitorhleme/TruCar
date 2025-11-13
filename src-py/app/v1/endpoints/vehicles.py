@@ -3,8 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from pydantic import BaseModel  # Importa BaseModel
 
-from app import crud
-from app.api import deps
+from app import crud, deps
 from app.models.user_model import User, UserRole
 from sqlalchemy.exc import IntegrityError
 

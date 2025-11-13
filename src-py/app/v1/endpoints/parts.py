@@ -8,8 +8,7 @@ from pydantic import BaseModel
 import logging
 import aiofiles
 from sqlalchemy.exc import IntegrityError
-from app import crud
-from app.api import deps
+from app import crud, deps
 from app.models.user_model import User
 from app.models.part_model import PartCategory, InventoryItemStatus
 from app.models.notification_model import NotificationType

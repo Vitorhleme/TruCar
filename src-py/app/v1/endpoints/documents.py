@@ -6,8 +6,7 @@ import uuid
 import shutil
 from pathlib import Path
 
-from app import crud
-from app.api import deps
+from app import crud, deps
 from app.models.user_model import User, UserRole
 from app.schemas.document_schema import DocumentPublic, DocumentCreate, DocumentUpdate
 from app.models.document_model import DocumentType

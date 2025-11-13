@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 # Importações da sua aplicação
-from app.api.api import api_router
+from app.api import api_router
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.db.session import engine

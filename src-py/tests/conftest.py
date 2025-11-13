@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 # Importações da sua aplicação
 from app.models.user_model import User, UserRole
-from app.api import deps
+from app import deps
 from app.db.base_class import Base
 from main import app
 

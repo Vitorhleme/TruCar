@@ -2,8 +2,7 @@ from fastapi import APIRouter, Depends, status, HTTPException, Response, Backgro
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.models.notification_model import NotificationType
-from app import crud
-from app.api import deps
+from app import crud, deps
 from app.models.user_model import User, UserRole
 from app.schemas.fuel_log_schema import FuelLogPublic, FuelLogCreate, FuelLogUpdate
 
