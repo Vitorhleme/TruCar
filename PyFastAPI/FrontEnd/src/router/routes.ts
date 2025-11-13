@@ -117,6 +117,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/PartsPage.vue'),
         meta: { roles: ['cliente_ativo', 'cliente_demo'] }
       },
+      { 
+        path: 'inventory/item/:id', // :id é o ID global (ex: 11)
+        name: 'item-details', 
+        component: () => import('pages/ItemDetailsPage.vue'),
+        meta: { roles: ['cliente_ativo', 'cliente_demo'] }
+      },
       {
         path: 'fines',
         name: 'fines',

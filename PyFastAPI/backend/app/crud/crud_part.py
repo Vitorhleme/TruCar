@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_ # <--- 'func' e 'select' já estavam importados, mas 'func' é crucial
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 import logging
@@ -15,12 +15,11 @@ from . import crud_inventory_transaction as crud_transaction
 from app.schemas.part_schema import PartCreate, PartUpdate
 from app.models.inventory_transaction_model import TransactionType
 
-
 def log_transaction(
     db: AsyncSession, *, item_id: int, part_id: int, user_id: int, 
     transaction_type: TransactionType, notes: Optional[str] = None, 
     related_vehicle_id: Optional[int] = None
-) -> InventoryTransaction: 
+) -> InventoryTransaction:
     log_entry = InventoryTransaction(
         item_id=item_id,
         part_id=part_id,
@@ -32,13 +31,12 @@ def log_transaction(
     return log_entry
 
 
-# --- 1. A LÓGICA DE CORREÇÃO ESTÁ AQUI ---
+# --- CORREÇÃO 1: Lógica do item_identifier ---
 async def create_inventory_items(
     db: AsyncSession, *, part_id: int, organization_id: int, quantity: int, user_id: int, notes: Optional[str] = None
 ) -> List[InventoryItem]:
-
-    logging.warning(f"ID DA SESSÃO NO CRUD: {id(db)}")
-
+    """Cria itens e os adiciona à sessão, sem commit ou flush."""
+    
     # 1. Buscar o maior 'item_identifier' existente PARA ESTE part_id
     stmt = select(func.max(InventoryItem.item_identifier)).where(
         InventoryItem.part_id == part_id
@@ -51,8 +49,6 @@ async def create_inventory_items(
     for i in range(quantity):
         
         # 2. Calcular o novo ID local
-        # (Se last_identifier=0, i=0 -> novo ID=1)
-        # (Se last_identifier=10, i=0 -> novo ID=11)
         current_identifier = last_identifier + 1 + i
         
         new_item = InventoryItem(
@@ -61,14 +57,12 @@ async def create_inventory_items(
             status=InventoryItemStatus.DISPONIVEL,
             item_identifier=current_identifier # <-- 3. Atribuir o novo ID local
         )
-        
         db.add(new_item)
         new_items.append(new_item)
     
     await db.flush() 
 
     for new_item in new_items:
-        # Usamos new_item.id (o ID global) para o log
         log = log_transaction(
             db=db, item_id=new_item.id, part_id=part_id, user_id=user_id,
             transaction_type=TransactionType.ENTRADA,
@@ -77,18 +71,37 @@ async def create_inventory_items(
         db.add(log)
         
     return new_items
-# --- FIM DA CORREÇÃO ---
-
 
 async def get_item_by_id(db: AsyncSession, *, item_id: int, organization_id: int) -> Optional[InventoryItem]:
+    """Busca um item serializado específico e os dados da peça (part) associada."""
     stmt = select(InventoryItem).where(
         InventoryItem.id == item_id, 
         InventoryItem.organization_id == organization_id
     ).options(
-        selectinload(InventoryItem.part) 
+        selectinload(InventoryItem.part) # Carrega a relação com Part
     )
     result = await db.execute(stmt)
     return result.scalars().first()
+
+# --- NOVO: Função para a Página de Detalhes ---
+async def get_item_with_details(db: AsyncSession, *, item_id: int, organization_id: int) -> Optional[InventoryItem]:
+    """Busca um item serializado e seu histórico completo."""
+    stmt = select(InventoryItem).where(
+        InventoryItem.id == item_id, 
+        InventoryItem.organization_id == organization_id
+    ).options(
+        selectinload(InventoryItem.part), # Carrega o template (Part)
+        selectinload(InventoryItem.transactions).options( # Carrega todas as transações
+            selectinload(InventoryTransaction.user),      # e o usuário de cada transação
+            selectinload(InventoryTransaction.related_vehicle),
+            selectinload(InventoryTransaction.item),      
+            selectinload(InventoryTransaction.part_template) 
+        )
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
+# --- FIM DA NOVA FUNÇÃO ---
+
 
 async def change_item_status(
     db: AsyncSession, *, item: InventoryItem, new_status: InventoryItemStatus, 
@@ -114,11 +127,10 @@ async def change_item_status(
         related_vehicle_id=vehicle_id
     )
     
-    db.add(item) 
+    db.add(item)
     
     if new_status == InventoryItemStatus.EM_USO and vehicle_id:
         part_template = item.part 
-        
         if part_template:
             new_component = VehicleComponent(
                 vehicle_id=vehicle_id,
@@ -126,25 +138,20 @@ async def change_item_status(
                 is_active=True,
                 installation_date=func.now()
             )
-            
             new_component.inventory_transaction = log_entry
-            
-            db.add(log_entry) 
+            db.add(log_entry)
             db.add(new_component)
             
             if part_template.value and part_template.value > 0:
-                
-                # --- 2. MODIFICAÇÃO PARA INCLUIR O ID LOCAL NO CUSTO ---
+                # --- CORREÇÃO 2: Usar item_identifier na descrição do Custo ---
                 new_cost = VehicleCost(
-                    # Usamos item.item_identifier (o ID local) na descrição
-                    description=f"Instalação: {part_template.name} (Item Cód: {item.item_identifier})", 
+                    description=f"Instalação: {part_template.name} (Cód. Item: {item.item_identifier})",
                     amount=part_template.value,
                     date=datetime.date.today(), 
                     cost_type=CostType.PECAS_COMPONENTES, 
                     vehicle_id=vehicle_id,
                     organization_id=item.organization_id
                 )
-                # --- FIM DA MODIFICAÇÃO ---
                 db.add(new_cost)
         else:
             db.add(log_entry)
@@ -154,10 +161,6 @@ async def change_item_status(
     await db.flush()
     return item
 
-
-#
-# --- RESTANTE DO FICHEIRO (Sem alterações) ---
-#
 async def get_simple(db: AsyncSession, *, part_id: int, organization_id: int) -> Optional[Part]:
     stmt = select(Part).where(Part.id == part_id, Part.organization_id == organization_id)
     result = await db.execute(stmt)
@@ -233,7 +236,7 @@ async def get_items_for_part(
     if status:
         stmt = stmt.where(InventoryItem.status == status)
     
-    # Ordena pelo ID local
+    # --- CORREÇÃO 3: Ordenar pelo ID local ---
     items = (await db.execute(stmt.order_by(InventoryItem.item_identifier))).scalars().all()
     return items
 
@@ -251,7 +254,6 @@ async def create(db: AsyncSession, *, part_in: PartCreate, organization_id: int,
     await db.flush() 
 
     if initial_quantity and initial_quantity > 0:
-        
         await create_inventory_items(
             db=db,
             part_id=db_obj.id,
@@ -272,9 +274,7 @@ async def update(db: AsyncSession, *, db_obj: Part, obj_in: PartUpdate, photo_ur
     db_obj.invoice_url = invoice_url 
     
     db.add(db_obj)
-    
     await db.flush()
-    
     return db_obj
 
 async def remove(db: AsyncSession, *, id: int, organization_id: int) -> Optional[Part]:
