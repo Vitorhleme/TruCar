@@ -91,12 +91,11 @@ const filteredTransactionOptions = computed(() => {
 });
 
 const availableItemOptions = computed(() => {
-  return partStore.availableItems.map(item => ({
-    label: `Código: #${item.id} (Criado em: ${new Date(item.created_at).toLocaleDateString()})`,
-    value: item.id
-  }));
+ return partStore.availableItems.map(item => ({
+ label: `Código: #${item.item_identifier} (Criado em: ${new Date(item.created_at).toLocaleDateString()})`, // <--- CORREÇÃO
+ value: item.id // <-- Mantemos 'item.id' aqui, pois é o valor que o backend usa para saber qual item mudar
+ }));
 });
-
 watch(() => props.modelValue, (isOpening) => {
   if (isOpening && props.part) {
     formData.value = { quantity: 1, item_id: null, transaction_type: 'Entrada' };
