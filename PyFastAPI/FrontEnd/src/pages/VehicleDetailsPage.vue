@@ -355,7 +355,6 @@ import InteractiveTireLayout from 'components/InteractiveTireLayout.vue';
 import TireCostChart from 'components/TireCostChart.vue';
 import { axleLayouts } from 'src/config/tire-layouts';
 import AddCostDialog from 'components/AddCostDialog.vue';
-import { id } from 'date-fns/locale';
 
 const route = useRoute();
 const $q = useQuasar();
@@ -556,7 +555,7 @@ const historyColumns: QTableColumn<InventoryTransaction>[] = [
                      partFromStore?.name || 
                      'Peça N/A';
                      
-        const itemId = row.item?.id || 'N/A';
+        const itemId = row.item?.item_identifier || 'N/A';
         
         return `${name} (Cód. Item: ${itemId})`;
       },
@@ -594,7 +593,7 @@ const historyColumns: QTableColumn<InventoryTransaction>[] = [
           );
           
           if (fullTransaction && fullTransaction.item) {
-            itemId = fullTransaction.item.id;
+            itemId = fullTransaction.item.item_identifier;
           }
         }
         

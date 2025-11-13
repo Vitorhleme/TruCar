@@ -1,15 +1,13 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_ # <--- 'func' e 'select' já estavam importados, mas 'func' é crucial
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 import logging
-import datetime # <--- IMPORTAR DATETIME
+import datetime 
 
-# --- NOVOS IMPORTS NECESSÁRIOS ---
 from app.models.vehicle_component_model import VehicleComponent
 from app.models.vehicle_cost_model import VehicleCost, CostType
 from app.models.inventory_transaction_model import InventoryTransaction
-# --- FIM DOS NOVOS IMPORTS ---
 
 from app.crud.crud_user import count_by_org
 from app.models.part_model import Part, InventoryItem, InventoryItemStatus, PartCategory
@@ -17,13 +15,12 @@ from . import crud_inventory_transaction as crud_transaction
 from app.schemas.part_schema import PartCreate, PartUpdate
 from app.models.inventory_transaction_model import TransactionType
 
-# --- 1. CORREÇÃO: Esta função não precisa ser 'async' ---
+
 def log_transaction(
     db: AsyncSession, *, item_id: int, part_id: int, user_id: int, 
     transaction_type: TransactionType, notes: Optional[str] = None, 
     related_vehicle_id: Optional[int] = None
-) -> InventoryTransaction: # <--- Retorna o objeto de log
-    """Apenas cria e adiciona o log à sessão, sem commit ou flush."""
+) -> InventoryTransaction: 
     log_entry = InventoryTransaction(
         item_id=item_id,
         part_id=part_id,
@@ -35,23 +32,35 @@ def log_transaction(
     return log_entry
 
 
+# --- 1. A LÓGICA DE CORREÇÃO ESTÁ AQUI ---
 async def create_inventory_items(
     db: AsyncSession, *, part_id: int, organization_id: int, quantity: int, user_id: int, notes: Optional[str] = None
 ) -> List[InventoryItem]:
-# --- FIM DA MODIFICAÇÃO 1 ---
 
     logging.warning(f"ID DA SESSÃO NO CRUD: {id(db)}")
-    """Cria itens e os adiciona à sessão, sem commit ou flush."""
+
+    # 1. Buscar o maior 'item_identifier' existente PARA ESTE part_id
+    stmt = select(func.max(InventoryItem.item_identifier)).where(
+        InventoryItem.part_id == part_id
+    )
+    result = await db.execute(stmt)
+    # Se não houver itens (None), começamos do 0
+    last_identifier = result.scalars().first() or 0 
+
     new_items = []
-    for _ in range(quantity):
+    for i in range(quantity):
         
-        # --- 2. USAR OS PARÂMETROS DE ID DIRETAMENTE ---
+        # 2. Calcular o novo ID local
+        # (Se last_identifier=0, i=0 -> novo ID=1)
+        # (Se last_identifier=10, i=0 -> novo ID=11)
+        current_identifier = last_identifier + 1 + i
+        
         new_item = InventoryItem(
-            part_id=part_id,                 # ANTES: part.id
-            organization_id=organization_id, # ANTES: part.organization_id
-            status=InventoryItemStatus.DISPONIVEL
+            part_id=part_id,
+            organization_id=organization_id,
+            status=InventoryItemStatus.DISPONIVEL,
+            item_identifier=current_identifier # <-- 3. Atribuir o novo ID local
         )
-        # --- FIM DA MODIFICAÇÃO 2 ---
         
         db.add(new_item)
         new_items.append(new_item)
@@ -59,54 +68,45 @@ async def create_inventory_items(
     await db.flush() 
 
     for new_item in new_items:
+        # Usamos new_item.id (o ID global) para o log
         log = log_transaction(
-            db=db, item_id=new_item.id, part_id=part_id, user_id=user_id, # ANTES: part_id=part.id
+            db=db, item_id=new_item.id, part_id=part_id, user_id=user_id,
             transaction_type=TransactionType.ENTRADA,
             notes=notes or "Entrada de novo item"
         )
         db.add(log)
         
     return new_items
+# --- FIM DA CORREÇÃO ---
 
-# --- CORRIGIDO (Carrega o 'part' para sabermos o preço e nome) ---
+
 async def get_item_by_id(db: AsyncSession, *, item_id: int, organization_id: int) -> Optional[InventoryItem]:
-    """Busca um item serializado específico e os dados da peça (part) associada."""
     stmt = select(InventoryItem).where(
         InventoryItem.id == item_id, 
         InventoryItem.organization_id == organization_id
     ).options(
-        selectinload(InventoryItem.part) # Carrega a relação com Part
+        selectinload(InventoryItem.part) 
     )
     result = await db.execute(stmt)
     return result.scalars().first()
 
-# --- CORREÇÃO DEFINITIVA (Adiciona lógica de Custo e Componente) ---
-# --- CORREÇÃO DEFINITIVA (Adiciona lógica de Custo e Componente) ---
 async def change_item_status(
     db: AsyncSession, *, item: InventoryItem, new_status: InventoryItemStatus, 
     user_id: int, vehicle_id: Optional[int] = None, notes: Optional[str] = None
 ) -> InventoryItem:
-    """Muda o status de um item E cria Custo/Componente se for instalação."""
     
     transaction_type_map = {
-        # ANTES:
-        # InventoryItemStatus.EM_USO: TransactionType.SAIDA_USO,
-        
-        # DEPOIS:
         InventoryItemStatus.EM_USO: TransactionType.INSTALACAO,
-        
         InventoryItemStatus.FIM_DE_VIDA: TransactionType.FIM_DE_VIDA
     }
     
     if new_status not in transaction_type_map:
         raise ValueError("Tipo de transação inválido para mudança de status.")
 
-    # 1. Atualiza o Item
     item.status = new_status
     item.installed_on_vehicle_id = vehicle_id
     item.installed_at = func.now() if vehicle_id else None
     
-    # 2. Cria o Log de Histórico (Corrigido sem 'await')
     log_entry = log_transaction( 
         db=db, item_id=item.id, part_id=item.part_id, user_id=user_id,
         transaction_type=transaction_type_map[new_status],
@@ -114,15 +114,12 @@ async def change_item_status(
         related_vehicle_id=vehicle_id
     )
     
-    db.add(item) # Adiciona o item atualizado
+    db.add(item) 
     
-    # 3. Lógica de Custo e Componente
     if new_status == InventoryItemStatus.EM_USO and vehicle_id:
-        
         part_template = item.part 
         
         if part_template:
-            # 3a. Cria o "Componente"
             new_component = VehicleComponent(
                 vehicle_id=vehicle_id,
                 part_id=part_template.id,
@@ -130,45 +127,32 @@ async def change_item_status(
                 installation_date=func.now()
             )
             
-            # Liga o Componente à Transação
             new_component.inventory_transaction = log_entry
             
-            db.add(log_entry) # Adiciona o log (agora ligado)
-            db.add(new_component) # Adiciona o componente
+            db.add(log_entry) 
+            db.add(new_component)
             
-            # 3b. Cria o "Custo"
             if part_template.value and part_template.value > 0:
                 
-                # --- AQUI ESTÁ A MUDANÇA ---
-                # ANTES:
-                # new_cost = VehicleCost(
-                #     description=f"Instalação da peça: {part_template.name}",
-                #     amount=part_template.value,
-                #     ...
-                # )
-                
-                # DEPOIS:
+                # --- 2. MODIFICAÇÃO PARA INCLUIR O ID LOCAL NO CUSTO ---
                 new_cost = VehicleCost(
-                    description=f"Instalação: {part_template.name} (Cód. Item: {item.id})",
+                    # Usamos item.item_identifier (o ID local) na descrição
+                    description=f"Instalação: {part_template.name} (Item Cód: {item.item_identifier})", 
                     amount=part_template.value,
-                # --- FIM DA MUDANÇA ---
                     date=datetime.date.today(), 
                     cost_type=CostType.PECAS_COMPONENTES, 
                     vehicle_id=vehicle_id,
                     organization_id=item.organization_id
                 )
+                # --- FIM DA MODIFICAÇÃO ---
                 db.add(new_cost)
         else:
             db.add(log_entry)
     else:
         db.add(log_entry)
 
-    # O CRUD NÃO FAZ COMMIT
     await db.flush()
-    # --- 3. CORREÇÃO: Remover 'db.refresh' ---
-    # await db.refresh(item) # <--- REMOVIDO! Causa MissingGreenlet
     return item
-# --- FIM DA CORREÇÃO DEFINITIVA ---
 
 
 #
@@ -216,9 +200,6 @@ async def get_multi_by_org(
         select(Part, func.coalesce(subquery.c.stock_count, 0))
         .outerjoin(subquery, Part.id == subquery.c.part_id)
         .where(Part.organization_id == organization_id)
-        
-        # --- ESTA LINHA É REMOVIDA ---
-        # .options(selectinload(Part.items)) # <-- REMOVIDO! Causa ResponseValidationError
     )
 
     if search:
@@ -238,7 +219,6 @@ async def get_multi_by_org(
     parts_with_stock = []
     for part, stock_count in result_rows:
         part.stock = stock_count 
-        # part.items não será carregado aqui, o que é o correto
         parts_with_stock.append(part)
         
     return parts_with_stock
@@ -253,12 +233,11 @@ async def get_items_for_part(
     if status:
         stmt = stmt.where(InventoryItem.status == status)
     
-    items = (await db.execute(stmt.order_by(InventoryItem.id))).scalars().all()
+    # Ordena pelo ID local
+    items = (await db.execute(stmt.order_by(InventoryItem.item_identifier))).scalars().all()
     return items
 
 async def create(db: AsyncSession, *, part_in: PartCreate, organization_id: int, user_id: int, photo_url: Optional[str] = None, invoice_url: Optional[str] = None) -> Part:
-    """Cria uma nova Part (template) (Corrigido: Sem commit e Sem refresh)."""
-    
     initial_quantity = part_in.initial_quantity
     part_data = part_in.model_dump(exclude={"initial_quantity"})
 
@@ -269,27 +248,22 @@ async def create(db: AsyncSession, *, part_in: PartCreate, organization_id: int,
         organization_id=organization_id
     )
     db.add(db_obj)
-    await db.flush() # Isso já popula o db_obj.id
-
-    
+    await db.flush() 
 
     if initial_quantity and initial_quantity > 0:
         
-        # --- 3. MODIFICAR A CHAMADA DESTA FUNÇÃO ---
         await create_inventory_items(
             db=db,
-            part_id=db_obj.id,           # ANTES: part=db_obj
-            organization_id=organization_id, # ANTES: (não existia, era pego de part.organization_id)
+            part_id=db_obj.id,
+            organization_id=organization_id,
             quantity=initial_quantity,
             user_id=user_id,
             notes=f"Carga inicial de {initial_quantity} itens no sistema."
         )
-        # --- FIM DA MODIFICAÇÃO 3 ---
     
     return db_obj
 
 async def update(db: AsyncSession, *, db_obj: Part, obj_in: PartUpdate, photo_url: Optional[str], invoice_url: Optional[str]) -> Part:
-    """Atualiza uma Part (Corrigido: Sem commit)."""
     update_data = obj_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_obj, field, value)
@@ -300,13 +274,10 @@ async def update(db: AsyncSession, *, db_obj: Part, obj_in: PartUpdate, photo_ur
     db.add(db_obj)
     
     await db.flush()
-    # --- 4. CORREÇÃO: Remover 'db.refresh' ---
-    # await db.refresh(db_obj) # <--- REMOVIDO! Causa MissingGreenlet
     
     return db_obj
 
 async def remove(db: AsyncSession, *, id: int, organization_id: int) -> Optional[Part]:
-    """Remove uma Part (Corrigido: Sem commit)."""
     db_obj = await get_simple(db, part_id=id, organization_id=organization_id)
     if db_obj:
         await db.delete(db_obj)
