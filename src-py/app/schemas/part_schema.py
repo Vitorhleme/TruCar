@@ -8,6 +8,7 @@ from app.models.part_model import PartCategory, InventoryItemStatus
 # --- 1. Schema para o Item Físico (Individual) ---
 class InventoryItemPublic(BaseModel):
     id: int
+    item_identifier: int  # <--- ADICIONE ESTA LINHA
     status: InventoryItemStatus
     part_id: int 
     organization_id: int
