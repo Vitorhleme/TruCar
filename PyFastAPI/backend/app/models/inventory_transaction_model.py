@@ -6,7 +6,10 @@ from app.db.base_class import Base
 
 class TransactionType(str, enum.Enum):
     ENTRADA = "Entrada"
-    SAIDA_USO = "Saída para Uso"
+    # --- CORREÇÃO DE TEXTO RECOMENDADA ---
+    # Altere o texto aqui para refletir melhor a ação
+    SAIDA_USO = "Instalação (Uso)" 
+    # --- FIM DA CORREÇÃO ---
     FIM_DE_VIDA = "Fim de Vida"
     # RETORNO_ESTOQUE = "Retorno"  <-- REMOVIDO
     AJUSTE_INICIAL = "Ajuste Inicial" # Mantido para a criação de itens

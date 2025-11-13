@@ -89,7 +89,12 @@ async def change_item_status(
     """Muda o status de um item E cria Custo/Componente se for instalação."""
     
     transaction_type_map = {
-        InventoryItemStatus.EM_USO: TransactionType.SAIDA_USO,
+        # ANTES:
+        # InventoryItemStatus.EM_USO: TransactionType.SAIDA_USO,
+        
+        # DEPOIS:
+        InventoryItemStatus.EM_USO: TransactionType.INSTALACAO,
+        
         InventoryItemStatus.FIM_DE_VIDA: TransactionType.FIM_DE_VIDA
     }
     
@@ -133,9 +138,20 @@ async def change_item_status(
             
             # 3b. Cria o "Custo"
             if part_template.value and part_template.value > 0:
+                
+                # --- AQUI ESTÁ A MUDANÇA ---
+                # ANTES:
+                # new_cost = VehicleCost(
+                #     description=f"Instalação da peça: {part_template.name}",
+                #     amount=part_template.value,
+                #     ...
+                # )
+                
+                # DEPOIS:
                 new_cost = VehicleCost(
-                    description=f"Instalação da peça: {part_template.name}",
+                    description=f"Instalação: {part_template.name} (Cód. Item: {item.id})",
                     amount=part_template.value,
+                # --- FIM DA MUDANÇA ---
                     date=datetime.date.today(), 
                     cost_type=CostType.PECAS_COMPONENTES, 
                     vehicle_id=vehicle_id,

@@ -91,7 +91,7 @@
       </q-card-section>
 
       <!-- Botão Gerar -->
-      <q-card-actions class="bg-grey-1 q-pa-md" align="right">
+      <q-card-actions class=" q-pa-md" align="right">
         <q-btn
           @click="generateReport"
           color="primary"

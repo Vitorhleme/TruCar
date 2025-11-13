@@ -211,7 +211,8 @@
             <q-table :rows="filteredCosts" :columns="costColumns" row-key="id" :loading="costStore.isLoading" no-data-label="Nenhum custo encontrado para os filtros aplicados." flat bordered>
               <template v-slot:bottom-row>
                 <q-tr class="text-weight-bold" :class="$q.dark.isActive ? 'bg-black-9' : 'bg-grey-2'">
-                  <q-td colspan="2" class="text-right">Total (Filtrado):</q-td>
+                  <!-- CORREÇÃO: Colspan aumentado para 3 para incluir a nova coluna 'description' -->
+                  <q-td colspan="3" class="text-right">Total (Filtrado):</q-td>
                   <q-td class="text-right">
                     {{ new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCost) }}
                   </q-td>
@@ -379,7 +380,10 @@ const tab = ref((route.query.tab as string) || 'tires');
 const isAgro = computed(() => authStore.userSector === 'agronegocio');
 
 const isHistoryLoading = ref(false);
-const inventoryHistory = ref<InventoryTransaction[]>([]);
+// --- CORREÇÃO DE TIPO ---
+// A API envia um objeto mais complexo do que o 'InventoryTransaction' define.
+// Usamos 'any[]' para evitar erros de TypeScript e depois tratamos os dados.
+const inventoryHistory = ref<any[]>([]);
 
 // DIÁLOGOS E FORMULÁRIOS
 const isAddCostDialogOpen = ref(false);
@@ -475,6 +479,8 @@ const kpiAvgTireLifespan = computed(() => {
 });
 
 // ### GRÁFICO DE CUSTOS SIMPLIFICADO ###
+// --- CORREÇÃO DE TIPO ---
+// Corrigido para usar os tipos exatos do 'TransactionType' do frontend
 const tireCostsByMonth = computed(() => {
   return inventoryHistory.value
     .filter(t => t.part?.category === 'Pneu' && t.transaction_type === 'Saída para Uso' && t.part?.value)
@@ -483,6 +489,7 @@ const tireCostsByMonth = computed(() => {
       amount: t.part!.value!,
     }));
 });
+// --- FIM DA CORREÇÃO ---
 
 // ### TABELAS E FILTROS ###
 const search = ref({ history: '', components: '', costs: '', maintenances: '' });
@@ -534,23 +541,55 @@ const historyTireColumns: QTableColumn<VehicleTireHistory>[] = [
   { name: 'cost_per_km', label: 'Custo/KM', field: row => (row.km_run > 0 && row.part.value) ? `R$ ${(row.part.value / row.km_run).toFixed(2)}` : 'N/A', align: 'right', sortable: true },
 ];
 
-const historyColumns: QTableColumn[] = [
+// --- CORREÇÃO DAS COLUNAS DO HISTÓRICO ---
+const historyColumns: QTableColumn<InventoryTransaction>[] = [
     { name: 'timestamp', label: 'Data e Hora', field: 'timestamp', format: (val) => format(new Date(val), 'dd/MM/yyyy HH:mm'), align: 'left', sortable: true },
-    { name: 'part', label: 'Peça / Item', field: row => row.part?.name || 'Item Removido', align: 'left', sortable: true },
+    { 
+      name: 'part', 
+      label: 'Peça / Cód. Item', 
+      // O 'part' na transação (no frontend .ts) é o template.
+      // O 'item' (com o ID) vem da API mas não está no tipo, então usamos 'as any'.
+      field: row => `${row.part?.name || 'Item Removido'} (Cód. Item: ${(row as any).item?.id || 'N/A'})`, 
+      align: 'left', 
+      sortable: true 
+    },
     { name: 'transaction_type', label: 'Movimentação', field: 'transaction_type', align: 'center', sortable: true },
-    { name: 'quantity_change', label: 'Quantidade', field: 'quantity_change', align: 'center', sortable: true, format: (val) => val > 0 ? `+${val}`: val },
+    // Corrigido para usar 'quantity_change' que já existe no tipo do frontend.
+    { 
+      name: 'quantity_change', 
+      label: 'Quantidade', 
+      field: 'quantity_change', 
+      align: 'center', 
+      sortable: true, 
+      format: (val: number) => (val > 0 ? `+${val}`: String(val)) // Converte para string para satisfazer o tipo
+    },
     { name: 'user', label: 'Realizado por', field: row => row.user?.full_name || 'Sistema', align: 'left' },
 ];
+// --- FIM DA CORREÇÃO ---
+
+// --- CORREÇÃO DAS COLUNAS DE COMPONENTES ---
 const componentColumns: QTableColumn<VehicleComponent>[] = [
-  { name: 'part', label: 'Componente', field: row => row.part?.name || 'Item Removido', align: 'left', sortable: true },
+  { 
+    name: 'part', 
+    label: 'Componente / Cód. Item', 
+    // O 'part' é o template.
+    // O 'inventory_transaction' (que tem o 'item') não está no tipo, usamos 'as any'.
+    field: row => `${row.part?.name || 'Item Removido'} (Cód. Item: ${(row.inventory_transaction as any)?.item?.id || 'N/A'})`, 
+    align: 'left', 
+    sortable: true 
+  },
   { name: 'installation_date', label: 'Instalado em', field: 'installation_date', format: (val) => format(new Date(val), 'dd/MM/yyyy'), align: 'left', sortable: true },
   { name: 'age', label: 'Idade (dias)', field: 'installation_date', format: (val) => `${differenceInDays(new Date(), new Date(val))}`, align: 'center', sortable: true },
   { name: 'installer', label: 'Instalado por', field: row => row.inventory_transaction?.user?.full_name || 'N/A', align: 'left', sortable: true },
   { name: 'actions', label: 'Ações', field: () => '', align: 'right' },
 ];
+// --- FIM DA CORREÇÃO ---
+
 const costColumns: QTableColumn[] = [
   { name: 'date', label: 'Data', field: 'date', format: (val) => format(new Date(val), 'dd/MM/yyyy'), sortable: true, align: 'left' },
   { name: 'cost_type', label: 'Tipo', field: 'cost_type', sortable: true, align: 'left' },
+  // Adicionada a coluna 'description' para corresponder ao seu pedido
+  { name: 'description', label: 'Descrição', field: 'description', sortable: false, align: 'left', style: 'max-width: 300px; white-space: pre-wrap;' },
   { name: 'amount', label: 'Valor', field: 'amount', format: (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), sortable: true, align: 'right' },
 ];
 const maintenanceColumns: QTableColumn<MaintenanceRequest>[] = [
@@ -566,7 +605,8 @@ const maintenanceColumns: QTableColumn<MaintenanceRequest>[] = [
 async function fetchHistory() {
   isHistoryLoading.value = true;
   try {
-    const { data } = await api.get<InventoryTransaction[]>(`/vehicles/${vehicleId}/inventory-history`);
+    // Usamos 'any[]' pois a API retorna mais dados do que o tipo 'InventoryTransaction' define
+    const { data } = await api.get<any[]>(`/vehicles/${vehicleId}/inventory-history`);
     inventoryHistory.value = data;
   } catch (error) {
     console.error("Falha ao carregar histórico:", error);
