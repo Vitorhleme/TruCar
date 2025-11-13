@@ -2,12 +2,11 @@ import { defineStore } from 'pinia';
 import { api } from 'boot/axios';
 import { Notify } from 'quasar';
 import { isAxiosError } from 'axios';
-// --- 1. IMPORTAR 'PartCreate' ---
 import type { Part, PartCreate } from 'src/models/part-models';
 import type { InventoryTransaction } from 'src/models/inventory-transaction-models';
-import type { InventoryItem, InventoryItemStatus } from 'src/models/inventory-item-models';
+// --- 1. IMPORTAR O NOVO MODELO ---
+import type { InventoryItem, InventoryItemStatus, InventoryItemDetails } from 'src/models/inventory-item-models';
 
-// --- 2. BASEAR O PAYLOAD EM 'PartCreate' ---
 export interface PartCreatePayload extends PartCreate {
   photo_file?: File | null;
   invoice_file?: File | null;
@@ -19,13 +18,17 @@ export const usePartStore = defineStore('part', {
     selectedPartHistory: [] as InventoryTransaction[],
     availableItems: [] as InventoryItem[], 
     
+    // --- 2. NOVO STATE PARA A PÁGINA ---
+    selectedItemDetails: null as InventoryItemDetails | null,
+    isItemDetailsLoading: false,
+    // --- FIM DO NOVO STATE ---
+    
     isLoading: false,
     isHistoryLoading: false,
     isItemsLoading: false,
   }),
 
   actions: {
-    // ... (fetchParts, createPart, updatePart, deletePart... sem mudanças) ...
     async fetchParts(searchQuery: string | null = null) {
       this.isLoading = true;
       try {
@@ -48,13 +51,6 @@ export const usePartStore = defineStore('part', {
                   formData.append(key, String(value));
               }
           });
-          // NOTA: Os uploads de arquivo foram removidos do endpoint 'create_part'
-          // if (payload.photo_file) {
-          //     formData.append('file', payload.photo_file);
-          // }
-          // if (payload.invoice_file) {
-          //     formData.append('invoice_file', payload.invoice_file);
-          // }
           
           await api.post('/parts/', formData, {
               headers: { 'Content-Type': 'multipart/form-data' },
@@ -115,23 +111,13 @@ export const usePartStore = defineStore('part', {
       }
     },
 
-    // --- ESTA FUNÇÃO AGORA VAI FUNCIONAR ---
     async addItems(partId: number, quantity: number, notes?: string): Promise<boolean> {
       this.isLoading = true;
       try {
         const payload = { quantity, notes };
-        // 1. O frontend chama a API. 
-        // Não precisamos da 'response' pois o backend só retorna uma mensagem.
         await api.post(`/parts/${partId}/add-items`, payload);
         
-        // 2. 'response.data.stock' não existe mais e estava causando o bug.
-        // const index = this.parts.findIndex(p => p.id === partId);
-        // if (index !== -1) {
-          // 3. REMOVER ESTA LINHA (A CAUSA DO BUG)
-          // this.parts[index]!.stock = response.data.stock;
-        // }
-        
-        // 4. SOLUÇÃO: Recarregar a lista do zero, igual createPart e updatePart fazem.
+        // Recarregar a lista do zero
         await this.fetchParts();
 
         Notify.create({ type: 'positive', message: `${quantity} itens adicionados com sucesso!` });
@@ -144,7 +130,6 @@ export const usePartStore = defineStore('part', {
         this.isLoading = false;
       }
     },
-    // --- FIM DA ÁREA DE INTERESSE ---
 
     async setItemStatus(partId: number, itemId: number, newStatus: InventoryItemStatus, vehicleId?: number, notes?: string): Promise<boolean> {
       this.isLoading = true;
@@ -154,7 +139,7 @@ export const usePartStore = defineStore('part', {
 
         const index = this.parts.findIndex(p => p.id === partId);
         if (index !== -1) {
-          this.parts[index]!.stock -= 1; // Decrementa o estoque local para reatividade
+          this.parts[index]!.stock -= 1; 
         }
         
         Notify.create({ type: 'positive', message: 'Status do item atualizado com sucesso!' });
@@ -167,6 +152,23 @@ export const usePartStore = defineStore('part', {
         this.isLoading = false;
       }
     },
+
+    // --- 3. NOVA ACTION PARA BUSCAR OS DETALHES ---
+    async fetchItemDetails(itemId: number) {
+      this.isItemDetailsLoading = true;
+      this.selectedItemDetails = null;
+      try {
+        // Usamos o novo endpoint e o novo modelo
+        const response = await api.get<InventoryItemDetails>(`/parts/items/${itemId}`);
+        this.selectedItemDetails = response.data;
+      } catch (error) {
+        Notify.create({ type: 'negative', message: 'Falha ao carregar os detalhes do item.' });
+        console.error(error);
+      } finally {
+        this.isItemDetailsLoading = false;
+      }
+    },
+    // --- FIM DA NOVA ACTION ---
 
     async fetchAvailableItems(partId: number) {
       this.isItemsLoading = true;
