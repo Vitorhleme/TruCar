@@ -4,8 +4,7 @@ from typing import List
 import logging # <-- Adicionado para logs
 import json # <-- Importar json para tratar exceções
 
-from app import crud
-from app.api import deps
+from app import crud, deps
 from app.db.session import SessionLocal
 from app.models.user_model import User, UserRole
 from app.models.notification_model import NotificationType

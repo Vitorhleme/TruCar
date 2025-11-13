@@ -6,8 +6,7 @@ from xhtml2pdf import pisa
 import io
 from datetime import datetime, date, timedelta
 import logging
-from app import crud
-from app.api import deps
+from app import crud, deps
 from app.models.user_model import User, UserRole
 from app.schemas.report_generator_schema import ReportRequest
 # --- IMPORTS ATUALIZADOS ---

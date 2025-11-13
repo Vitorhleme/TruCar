@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from app import crud, models
-from app.api import deps
+from app import crud, models, deps
 from app.schemas.gps_schema import LocationCreate
 
 router = APIRouter()

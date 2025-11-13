@@ -5,8 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, EmailStr
 from typing import Any
 
-from app import crud
-from app.api import deps
+from app import crud, deps
 from app.core import auth, email_utils, security
 from app.schemas.token_schema import TokenData
 # --- ADICIONADO ---

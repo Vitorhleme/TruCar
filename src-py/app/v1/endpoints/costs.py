@@ -5,8 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from datetime import date
 
-from app import crud
-from app.api import deps
+from app import crud, deps
 from app.models.user_model import User
 from app.schemas.vehicle_cost_schema import VehicleCostPublic
 

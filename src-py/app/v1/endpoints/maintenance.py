@@ -6,8 +6,7 @@ import uuid
 import shutil
 from app.core.email_utils import send_email
 
-from app import crud
-from app.api import deps
+from app import crud, deps
 from app.models.user_model import User, UserRole
 from app.schemas.maintenance_schema import (
     MaintenanceRequestPublic, MaintenanceRequestCreate, MaintenanceRequestUpdate,
