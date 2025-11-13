@@ -4,10 +4,12 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from app.models.part_model import PartCategory, InventoryItemStatus
+# NÃO importe inventory_transaction_schema aqui no topo
 
 # --- 1. Schema para o Item Físico (Individual) ---
 class InventoryItemPublic(BaseModel):
     id: int
+    item_identifier: int  # <-- CORREÇÃO: Adicionado o ID local
     status: InventoryItemStatus
     part_id: int 
     organization_id: int
@@ -38,37 +40,37 @@ class PartUpdate(PartBase):
     condition: Optional[str] = None 
     pass
 
-# --- 3. Schema Público de DETALHE (usado para Criar, Atualizar, Adicionar Itens) ---
-class PartPublic(PartBase):
-    id: int
-    organization_id: int
-    photo_url: Optional[str] = None
-    invoice_url: Optional[str] = None
-    
-    stock: int = Field(0, description="Estoque disponível (calculado)")
-    
-    # Este schema é para detalhes, então ele MOSTRA os itens
-    items: List[InventoryItemPublic] = []
-
-    class Config:
-        from_attributes = True
-
-# --- 4. NOVO Schema Público de LISTA (usado para GET /parts/) ---
+# --- 3. Schema Público de LISTA (usado para GET /parts/) ---
 class PartListPublic(PartBase):
     id: int
     organization_id: int
     photo_url: Optional[str] = None
     invoice_url: Optional[str] = None
-    
     stock: int = Field(0, description="Estoque disponível (calculado)")
-    
-    # NOTE: O campo 'items' NÃO está incluído aqui.
-    # Isso evita que o Pydantic tente ler o atributo 'items' não carregado.
-
     class Config:
         from_attributes = True
 
-# --- 5. Recarregar os modelos ---
+# --- 4. Schema Público de DETALHE (Template) ---
+class PartPublic(PartBase):
+    id: int
+    organization_id: int
+    photo_url: Optional[str] = None
+    invoice_url: Optional[str] = None
+    stock: int = Field(0, description="Estoque disponível (calculado)")
+    items: List[InventoryItemPublic] = [] # Mostra os itens físicos
+    class Config:
+        from_attributes = True
+
+# --- 5. NOVO SCHEMA DE DETALHES DO ITEM (Para a nova página) ---
+# Usamos strings (Forward Refs) para evitar a importação circular
+class InventoryItemDetails(InventoryItemPublic):
+    part: 'PartListPublic' # Carrega o "template" (sem recursão)
+    transactions: List['TransactionPublic'] = [] # Carrega o histórico completo
+
+# --- 6. CORREÇÃO DO IMPORT CIRCULAR: Importar e Reconstruir ---
+from .inventory_transaction_schema import TransactionPublic 
+
 InventoryItemPublic.model_rebuild()
 PartPublic.model_rebuild()
-PartListPublic.model_rebuild() # Adicionado
+PartListPublic.model_rebuild()
+InventoryItemDetails.model_rebuild() # Agora ele pode encontrar 'TransactionPublic'

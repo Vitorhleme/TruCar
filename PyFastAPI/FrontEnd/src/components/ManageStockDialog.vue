@@ -35,7 +35,26 @@
             :rules="[val => !!val || 'Selecione um item']"
             emit-value map-options
             options-dense
-          />
+          >
+            <!-- ADICIONADO: Slot para o link -->
+            <template v-slot:option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section>
+                  <q-item-label>{{ scope.opt.label }}</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-btn
+                    icon="open_in_new"
+                    flat dense round
+                    size="sm"
+                    @click.stop="goToItemDetails(scope.opt.value)"
+                    title="Ver detalhes do item"
+                  />
+                </q-item-section>
+              </q-item>
+            </template>
+            <!-- FIM DO SLOT -->
+          </q-select>
           
           <q-select 
             v-if="formData.transaction_type === 'Saída para Uso'" 
@@ -62,6 +81,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
+import { useRouter } from 'vue-router'; // <-- 1. IMPORTAR ROUTER
 import { usePartStore } from 'stores/part-store';
 import { useVehicleStore } from 'stores/vehicle-store';
 import { useVehicleComponentStore } from 'stores/vehicle-component-store';
@@ -73,6 +93,7 @@ import { Notify } from 'quasar';
 const props = defineProps<{ modelValue: boolean, part: Part | null }>();
 const emit = defineEmits(['update:modelValue']);
 
+const router = useRouter(); // <-- 2. INICIAR ROUTER
 const partStore = usePartStore();
 const vehicleStore = useVehicleStore();
 const componentStore = useVehicleComponentStore();
@@ -90,12 +111,14 @@ const filteredTransactionOptions = computed(() => {
   return baseTransactionOptions;
 });
 
+// --- 3. CORREÇÃO: Usar 'item_identifier' no label ---
 const availableItemOptions = computed(() => {
   return partStore.availableItems.map(item => ({
-    label: `Código: #${item.id} (Criado em: ${new Date(item.created_at).toLocaleDateString()})`,
-    value: item.id
+    label: `Código: #${item.item_identifier} (Criado em: ${new Date(item.created_at).toLocaleDateString()})`,
+    value: item.id // O valor continua sendo o ID global
   }));
 });
+// --- FIM DA CORREÇÃO ---
 
 watch(() => props.modelValue, (isOpening) => {
   if (isOpening && props.part) {
@@ -123,6 +146,14 @@ function filterVehicles (val: string, update: (callbackFn: () => void) => void) 
     }
   });
 }
+
+// --- 4. ADICIONAR NOVA FUNÇÃO ---
+function goToItemDetails(itemId: number) {
+  // Fecha o popup (emit) e navega para a nova página
+  emit('update:modelValue', false);
+  void router.push({ name: 'item-details', params: { id: itemId } });
+}
+// --- FIM DA FUNÇÃO ---
 
 async function handleSubmit() {
   if (!props.part) return;
@@ -160,8 +191,7 @@ async function handleSubmit() {
     if (success) {
       emit('update:modelValue', false);
     }
-  // --- CORREÇÃO DO ERRO ESLint 'no-unused-vars' ---
-  } catch  { // <-- MUDANÇA DE 'error' PARA '_error'
+  } catch (error) { // Corrigido de '_error' para 'err' para ser mais explícito
      Notify.create({ type: 'negative', message: 'Ocorreu um erro inesperado.' });
   }
 }
