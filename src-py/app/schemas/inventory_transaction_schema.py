@@ -8,8 +8,7 @@ from app.models.inventory_transaction_model import TransactionType
 
 # --- 1. IMPORTAR OS SCHEMAS QUE SÃO SEGUROS (sem import circular) ---
 from .user_schema import UserPublic
-from .vehicle_schema import VehiclePublic
-# NÃO importe part_schema aqui
+# NÃO importe part_schema ou vehicle_schema aqui
 
 # --- 2. Schema para criar uma nova transação (Sem mudança) ---
 class TransactionCreate(BaseModel):
@@ -27,26 +26,34 @@ class TransactionPublic(BaseModel):
     timestamp: datetime
     
     user: Optional[UserPublic] = None
-    related_vehicle: Optional[VehiclePublic] = None
+    # Usamos string 'VehiclePublic' para evitar importação
+    related_vehicle: Optional['VehiclePublic'] = None
     related_user: Optional[UserPublic] = None
     
+    # Usamos strings 'InventoryItemPublic' e 'PartPublic'
     item: Optional['InventoryItemPublic'] = None 
-    part: Optional['PartPublic'] = Field(None, alias="part_template")
-
+    
+    # --- A MUDANÇA ESTÁ AQUI ---
+    # ANTES:
+    # part: Optional['PartPublic'] = Field(None, alias="part_template")
+    # DEPOIS: Usamos o schema de LISTA, que não é recursivo
+    part: Optional['PartListPublic'] = Field(None, alias="part_template")
     class Config:
         from_attributes = True
 
-# --- 4. IMPORTAR OS SCHEMAS REFERENCIADOS ---
-from .part_schema import InventoryItemPublic, PartPublic
-TransactionPublic.model_rebuild()
-
-
-# --- 5. NOVO SCHEMA SIMPLIFICADO (A CORREÇÃO) ---
-# Este schema é usado APENAS para o VehicleComponent.
-# Ele só se importa com o usuário (o instalador).
+# --- 4. NOVO SCHEMA SIMPLIFICADO (A CORREÇÃO) ---
 class TransactionForComponent(BaseModel):
     id: int
     user: Optional[UserPublic] = None # Carrega apenas o usuário
+    # Adicionamos 'item' aqui para podermos pegar o 'item_identifier' na VehicleDetailsPage
+    item: Optional['InventoryItemPublic'] = None 
 
     class Config:
         from_attributes = True
+
+# --- 5. CORREÇÃO DO IMPORT CIRCULAR: Importar e Reconstruir ---
+from .part_schema import InventoryItemPublic, PartPublic, PartListPublic
+from .vehicle_schema import VehiclePublic # Importamos aqui
+
+TransactionPublic.model_rebuild()
+TransactionForComponent.model_rebuild()
