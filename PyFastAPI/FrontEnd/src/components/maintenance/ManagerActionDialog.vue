@@ -33,7 +33,7 @@
             :name="comment.user.full_name"
             :sent="comment.user.id === authStore.user?.id"
             text-color="white"
-            :bg-color="comment.user.id === authStore.user?.id ? 'primary' : 'grey-7'"
+            :bg-color="comment.user.id === authStore.user?.id ? 'primary' : 'grey'"
           >
             <div>{{ comment.comment_text }}</div>
           </q-chat-message>

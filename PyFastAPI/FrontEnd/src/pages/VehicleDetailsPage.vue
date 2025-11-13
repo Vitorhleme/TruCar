@@ -22,9 +22,7 @@
     <q-separator />
 
     <q-tab-panels v-model="tab" animated>
-      <!-- ### ABA DE PNEUS ATUALIZADA E ENRIQUECIDA ### -->
       <q-tab-panel name="tires" class="q-pa-md">
-        <!-- 1. SEÇÃO DE KPIs DE PNEUS -->
         <div class="row q-col-gutter-md q-mb-md">
           <div class="col-6 col-md-3">
             <q-card flat bordered>
@@ -72,7 +70,6 @@
 
         <q-separator class="q-my-lg" />
 
-        <!-- 2. SEÇÃO DE GERENCIAMENTO VISUAL -->
         <div class="row items-center justify-between q-mb-md">
           <div class="text-h6">Layout e Status Atual</div>
           <q-btn
@@ -105,7 +102,6 @@
 
         <q-separator class="q-my-lg" />
 
-        <!-- 3. SEÇÃO DE ANÁLISE HISTÓRICA E FINANCEIRA -->
         <div class="text-h6 q-mb-md">Análise e Histórico de Pneus</div>
         <div class="row q-col-gutter-lg">
           <div class="col-12 col-lg-8">
@@ -211,7 +207,6 @@
             <q-table :rows="filteredCosts" :columns="costColumns" row-key="id" :loading="costStore.isLoading" no-data-label="Nenhum custo encontrado para os filtros aplicados." flat bordered>
               <template v-slot:bottom-row>
                 <q-tr class="text-weight-bold" :class="$q.dark.isActive ? 'bg-black-9' : 'bg-grey-2'">
-                  <!-- CORREÇÃO: Colspan aumentado para 3 para incluir a nova coluna 'description' -->
                   <q-td colspan="3" class="text-right">Total (Filtrado):</q-td>
                   <q-td class="text-right">
                     {{ new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCost) }}
@@ -262,7 +257,6 @@
       </q-tab-panel>
     </q-tab-panels>
 
-    <!-- DIÁLOGOS -->
     <q-dialog v-model="isInstallTireDialogOpen">
       <q-card style="width: 500px; max-width: 90vw;">
         <q-form @submit.prevent="handleInstallTire">
@@ -361,6 +355,7 @@ import InteractiveTireLayout from 'components/InteractiveTireLayout.vue';
 import TireCostChart from 'components/TireCostChart.vue';
 import { axleLayouts } from 'src/config/tire-layouts';
 import AddCostDialog from 'components/AddCostDialog.vue';
+import { id } from 'date-fns/locale';
 
 const route = useRoute();
 const $q = useQuasar();
@@ -380,10 +375,9 @@ const tab = ref((route.query.tab as string) || 'tires');
 const isAgro = computed(() => authStore.userSector === 'agronegocio');
 
 const isHistoryLoading = ref(false);
-// --- CORREÇÃO DE TIPO ---
-// A API envia um objeto mais complexo do que o 'InventoryTransaction' define.
-// Usamos 'any[]' para evitar erros de TypeScript e depois tratamos os dados.
-const inventoryHistory = ref<any[]>([]);
+// --- CORREÇÃO DE TIPO (Erro 1) ---
+// Trocamos 'any[]' pelo tipo correto que esperamos da API
+const inventoryHistory = ref<InventoryTransaction[]>([]);
 
 // DIÁLOGOS E FORMULÁRIOS
 const isAddCostDialogOpen = ref(false);
@@ -547,41 +541,98 @@ const historyColumns: QTableColumn<InventoryTransaction>[] = [
     { 
       name: 'part', 
       label: 'Peça / Cód. Item', 
-      // O 'part' na transação (no frontend .ts) é o template.
-      // O 'item' (com o ID) vem da API mas não está no tipo, então usamos 'as any'.
-      field: row => `${row.part?.name || 'Item Removido'} (Cód. Item: ${(row as any).item?.id || 'N/A'})`, 
+      field: (row) => {
+        // CORREÇÃO: Busca o nome no partStore usando o part_id do item.
+        
+        // 1. Tenta pegar o part_id (do item ou da part)
+        const partId = row.item?.part_id || row.part?.id;
+        
+        // 2. Encontra a peça correspondente no store
+        const partFromStore = partStore.parts.find(p => p.id === partId);
+        
+        // 3. Usa o nome do store, ou o que já tínhamos, ou o fallback
+        const name = row.part?.name || 
+                     row.item?.part?.name || 
+                     partFromStore?.name || 
+                     'Peça N/A';
+                     
+        const itemId = row.item?.id || 'N/A';
+        
+        return `${name} (Cód. Item: ${itemId})`;
+      },
       align: 'left', 
       sortable: true 
     },
     { name: 'transaction_type', label: 'Movimentação', field: 'transaction_type', align: 'center', sortable: true },
-    // Corrigido para usar 'quantity_change' que já existe no tipo do frontend.
     { 
       name: 'quantity_change', 
       label: 'Quantidade', 
       field: 'quantity_change', 
       align: 'center', 
       sortable: true, 
-      format: (val: number) => (val > 0 ? `+${val}`: String(val)) // Converte para string para satisfazer o tipo
+      format: (val: number | null) => (val === null || val === undefined) ? 'N/A' : (val > 0 ? `+${val}`: String(val))
     },
     { name: 'user', label: 'Realizado por', field: row => row.user?.full_name || 'Sistema', align: 'left' },
 ];
 // --- FIM DA CORREÇÃO ---
 
 // --- CORREÇÃO DAS COLUNAS DE COMPONENTES ---
-const componentColumns: QTableColumn<VehicleComponent>[] = [
-  { 
+  const componentColumns: QTableColumn<VehicleComponent>[] = [
+    { 
     name: 'part', 
     label: 'Componente / Cód. Item', 
-    // O 'part' é o template.
-    // O 'inventory_transaction' (que tem o 'item') não está no tipo, usamos 'as any'.
-    field: row => `${row.part?.name || 'Item Removido'} (Cód. Item: ${(row.inventory_transaction as any)?.item?.id || 'N/A'})`, 
+    field: (row) => {
+        
+        // 1. O NOME (Já funciona)
+        const name = row.part?.name || 'Peça N/A';
+                     
+        // 2. O CÓD. ITEM (A CORREÇÃO)
+        let itemId: string | number = 'N/A';
+        if (row.inventory_transaction) {
+          const fullTransaction = inventoryHistory.value.find(
+            (hist) => hist.id === row.inventory_transaction?.id
+          );
+          
+          if (fullTransaction && fullTransaction.item) {
+            itemId = fullTransaction.item.id;
+          }
+        }
+        
+        // CORREÇÃO: Força a conversão para String() para calar o linter
+        return `${name} (Cód. Item: ${String(itemId)})`;
+    },
     align: 'left', 
     sortable: true 
   },
-  { name: 'installation_date', label: 'Instalado em', field: 'installation_date', format: (val) => format(new Date(val), 'dd/MM/yyyy'), align: 'left', sortable: true },
-  { name: 'age', label: 'Idade (dias)', field: 'installation_date', format: (val) => `${differenceInDays(new Date(), new Date(val))}`, align: 'center', sortable: true },
-  { name: 'installer', label: 'Instalado por', field: row => row.inventory_transaction?.user?.full_name || 'N/A', align: 'left', sortable: true },
-  { name: 'actions', label: 'Ações', field: () => '', align: 'right' },
+  { 
+    name: 'installation_date', 
+    label: 'Instalado em', 
+    field: 'installation_date', 
+    format: (val) => format(new Date(val), 'dd/MM/yyyy'), 
+    align: 'left', 
+    sortable: true 
+  },
+  { 
+    name: 'age', 
+    label: 'Idade (dias)', 
+    field: 'installation_date', 
+    format: (val) => `${differenceInDays(new Date(), new Date(val))}`, 
+    align: 'center', 
+    sortable: true 
+  },
+  { 
+    name: 'installer', 
+    label: 'Instalado por', 
+    field: row => row.inventory_transaction?.user?.full_name || 'N/A', 
+    align: 'left', 
+    sortable: true 
+  },
+  { 
+    name: 'actions', 
+    label: 'Ações', 
+    field: () => '', 
+    align: 'right' 
+  },
 ];
 // --- FIM DA CORREÇÃO ---
 
@@ -605,8 +656,9 @@ const maintenanceColumns: QTableColumn<MaintenanceRequest>[] = [
 async function fetchHistory() {
   isHistoryLoading.value = true;
   try {
-    // Usamos 'any[]' pois a API retorna mais dados do que o tipo 'InventoryTransaction' define
-    const { data } = await api.get<any[]>(`/vehicles/${vehicleId}/inventory-history`);
+    // --- CORREÇÃO DE TIPO (Erro 4) ---
+    // Usamos o tipo correto na chamada da API
+    const { data } = await api.get<InventoryTransaction[]>(`/vehicles/${vehicleId}/inventory-history`);
     inventoryHistory.value = data;
   } catch (error) {
     console.error("Falha ao carregar histórico:", error);

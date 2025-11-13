@@ -271,6 +271,8 @@ async def create(db: AsyncSession, *, part_in: PartCreate, organization_id: int,
     db.add(db_obj)
     await db.flush() # Isso já popula o db_obj.id
 
+    
+
     if initial_quantity and initial_quantity > 0:
         
         # --- 3. MODIFICAR A CHAMADA DESTA FUNÇÃO ---

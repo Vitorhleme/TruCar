@@ -6,7 +6,7 @@
         <div class="text-subtitle2">Solicitado por {{ request.reporter?.full_name || 'N/A' }}</div>
       </q-card-section>
 
-      <q-card-section v-if="authStore.isManager && !isClosed" class="bg-grey-2">
+      <q-card-section v-if="authStore.isManager && !isClosed" class="">
         <div class="text-weight-medium q-mb-sm">Ações do Gestor</div>
         <div class="row q-gutter-sm">
           <q-btn @click="() => handleUpdateStatus(MaintenanceStatus.APROVADA)" color="primary" label="Aprovar" dense unelevated icon="thumb_up" />
@@ -42,8 +42,8 @@
       
       <q-separator />
 
-      <q-card-section v-if="!isClosed" class="bg-grey-2">
-        <q-input v-model="newCommentText" outlined bg-color="white" placeholder="Digite sua mensagem..." dense autogrow @keydown.enter.prevent="postComment">
+      <q-card-section v-if="!isClosed" class="">
+        <q-input v-model="newCommentText" outlined bg-color="" placeholder="Digite sua mensagem..." dense autogrow @keydown.enter.prevent="postComment">
           <template v-slot:after>
             <q-btn @click="postComment" round dense flat icon="send" color="primary" :disable="!newCommentText.trim()" />
           </template>
