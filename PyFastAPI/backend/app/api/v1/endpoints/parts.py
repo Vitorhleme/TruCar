@@ -256,6 +256,7 @@ async def add_inventory_items(
     current_user: User = Depends(deps.get_current_active_manager)
 ):
     
+    # Buscamos o 'part' apenas para verificar se ele existe
     part = await crud_part.get_simple(db, part_id=part_id, organization_id=current_user.organization_id)
     if not part:
         raise HTTPException(status_code=404, detail="Peça (template) não encontrada.")
@@ -263,19 +264,34 @@ async def add_inventory_items(
         raise HTTPException(status_code=400, detail="Quantidade deve ser maior que zero.")
 
     try:
+        # --- ESTA É A LINHA DA CORREÇÃO ---
+        # ANTES:
+        # await crud_part.create_inventory_items(
+        #     db=db, part=part, quantity=payload.quantity, 
+        #     user_id=current_user.id, notes=payload.notes
+        # )
+        
+        # DEPOIS:
         await crud_part.create_inventory_items(
-            db=db, part=part, quantity=payload.quantity, 
-            user_id=current_user.id, notes=payload.notes
+            db=db, 
+            part_id=part.id,  # Passamos o part_id
+            organization_id=current_user.organization_id, # Passamos o org_id (seguro)
+            quantity=payload.quantity, 
+            user_id=current_user.id, 
+            notes=payload.notes
         )
+        # --- FIM DA CORREÇÃO ---
+        
         await db.commit()
     
     except Exception as e:
         await db.rollback()
+        # Adicionado log para ver erros futuros
+        logging.error(f"Erro ao adicionar itens: {e}", exc_info=True) 
         raise HTTPException(status_code=500, detail=f"Erro ao adicionar itens: {e}")
     
     # SUA SOLUÇÃO: Retorna uma resposta simples de sucesso 201.
     return {"message": "Itens adicionados com sucesso."}
-
 
 # --- O RESTO DO ARQUIVO NÃO PRECISA DE MUDANÇAS ---
 class SetItemStatusPayload(BaseModel):
