@@ -7,7 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel
 import logging # (Manter para logs)
 import aiofiles # Importamos, mas não vamos usar no 'create'
-
+from sqlalchemy.exc import IntegrityError
 from app import crud
 from app.api import deps
 from app.models.user_model import User
@@ -53,7 +53,7 @@ async def save_upload_file(upload_file: UploadFile, directory: Path) -> str:
              dependencies=[Depends(deps.check_demo_limit("parts"))])
 async def create_part(
     name: str = Form(...),
-    category: str = Form(...),
+    category: str = Form(...), # <--- Recebido como string
     minimum_stock: int = Form(...),
     initial_quantity: int = Form(0), 
     db: AsyncSession = Depends(deps.get_db),
@@ -62,21 +62,35 @@ async def create_part(
     location: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     value: Optional[float] = Form(None),
-    serial_number: Optional[str] = Form(None),
+    serial_number: Optional[str] = Form(None), # <--- Ponto de falha (Unique)
     lifespan_km: Optional[int] = Form(None),
-    # REMOVIDO: file: Optional[UploadFile] = File(None),
-    # REMOVIDO: invoice_file: Optional[UploadFile] = File(None),
     current_user: User = Depends(deps.get_current_active_manager)
 ):
+    
+    # --- 2. ADICIONAR VALIDAÇÃO DE ENUM (Igual ao update_part) ---
+    try:
+        category_enum = PartCategory(category)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Valor de categoria inválido: '{category}'. Valores esperados: {[e.value for e in PartCategory]}"
+        )
+    # --- FIM DA VALIDAÇÃO ---
+
     part_in = PartCreate(
-        name=name, category=category, minimum_stock=minimum_stock,
+        name=name, 
+        category=category_enum, # <--- 3. Usar o Enum validado
+        minimum_stock=minimum_stock,
         initial_quantity=initial_quantity,
-        part_number=part_number, brand=brand, location=location, notes=notes, value=value,
+        part_number=part_number, 
+        brand=brand, 
+        location=location, 
+        notes=notes, 
+        value=value,
         serial_number=serial_number,
         lifespan_km=lifespan_km
     )
     
-    # Lógica de upload removida para garantir que não haja erro
     photo_url, invoice_url = None, None
     
     try:
@@ -86,16 +100,31 @@ async def create_part(
             user_id=current_user.id, photo_url=photo_url, invoice_url=invoice_url
         )
         
-        # 2. ENDPOINT FAZ COMMIT (O item é criado aqui)
+        # --- A SOLUÇÃO ESTÁ AQUI ---
+        # 2. Capture o ID ANTES do commit, enquanto a sessão está ativa.
+        part_id_to_return = part_db.id
+        
+        # 3. ENDPOINT FAZ COMMIT
         await db.commit()
         
-        # 3. SUA SOLUÇÃO: Não recarregamos. Apenas retornamos um sucesso 201.
-        # O frontend não receberá o erro e poderá recarregar a página.
-        return {"id": part_db.id, "message": "Peça criada com sucesso."}
+        # 4. Retorne o ID que você salvou (um int), não o objeto part_db
+        return {"id": part_id_to_return, "message": "Peça criada com sucesso."}
+        # --- FIM DA SOLUÇÃO ---
         
     except ValueError as e:
         await db.rollback() 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        
+    except IntegrityError as e: # (Manter da solução anterior)
+        await db.rollback()
+        logging.warning(f"Erro de integridade ao criar peça: {e}")
+        if "unique constraint failed: parts.serial_number" in str(e).lower():
+             raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"O número de série '{serial_number}' já está em uso por outra peça."
+            )
+        raise HTTPException(status_code=500, detail=f"Erro de integridade no banco: {e}")
+        
     except Exception as e: 
         await db.rollback()
         logging.error(f"Erro ao criar peça: {e}", exc_info=True) # Loga o erro real
@@ -103,12 +132,12 @@ async def create_part(
     
 
 # A função 'update_part' (Editar) agora é usada para adicionar as fotos
-@router.put("/{part_id}", response_model=PartPublic)
+@router.put("/{part_id}") 
 async def update_part(
     part_id: int,
     background_tasks: BackgroundTasks,
     name: str = Form(...),
-    category: str = Form(...),
+    category: str = Form(...), 
     minimum_stock: int = Form(...),
     db: AsyncSession = Depends(deps.get_db),
     part_number: Optional[str] = Form(None),
@@ -116,19 +145,29 @@ async def update_part(
     location: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     value: Optional[float] = Form(None),
-    serial_number: Optional[str] = Form(None),
+    serial_number: Optional[str] = Form(None), 
     lifespan_km: Optional[int] = Form(None),
     condition: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None), # <--- Upload de arquivo mantido aqui
-    invoice_file: Optional[UploadFile] = File(None), # <--- Upload de arquivo mantido aqui
+    file: Optional[UploadFile] = File(None), 
+    invoice_file: Optional[UploadFile] = File(None), 
     current_user: User = Depends(deps.get_current_active_manager)
 ):
+    
+    # Validação de Categoria (da solução anterior)
+    try:
+        category_enum = PartCategory(category)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Valor de categoria inválido: '{category}'. Valores esperados: {[e.value for e in PartCategory]}"
+        )
+
     db_part = await crud_part.get_simple(db, part_id=part_id, organization_id=current_user.organization_id)
     if not db_part:
         raise HTTPException(status_code=404, detail="Peça não encontrada.")
         
     part_in = PartUpdate(
-        name=name, category=category, minimum_stock=minimum_stock, part_number=part_number, 
+        name=name, category=category_enum, minimum_stock=minimum_stock, part_number=part_number, 
         brand=brand, location=location, notes=notes, value=value,
         serial_number=serial_number,
         lifespan_km=lifespan_km,
@@ -137,25 +176,41 @@ async def update_part(
     
     photo_url = db_part.photo_url
     if file:
-        photo_url = await save_upload_file(file, UPLOAD_DIRECTORY) # Usa a nova função async
+        photo_url = await save_upload_file(file, UPLOAD_DIRECTORY)
 
     invoice_url = db_part.invoice_url
     if invoice_file:
-        invoice_url = await save_upload_file(invoice_file, UPLOAD_INVOICE_DIRECTORY) # Usa a nova função async
+        invoice_url = await save_upload_file(invoice_file, UPLOAD_INVOICE_DIRECTORY)
     
     try:
-        updated_part_simple = await crud_part.update(
+        await crud_part.update( # <--- Chamamos 'update'
             db=db, db_obj=db_part, obj_in=part_in, photo_url=photo_url, invoice_url=invoice_url
         )
-        await db.commit()
-        part_with_stock = await crud_part.get_part_with_stock(
-            db, part_id=updated_part_simple.id, organization_id=current_user.organization_id
-        )
-        return part_with_stock
+        await db.commit() # <--- Commitamos
+        
+        # --- 2. NÃO RECARREGUE O OBJETO ---
+        # Removido: part_with_stock = await crud_part.get_part_with_stock(...)
+        
+        # --- 3. RETORNE UMA MENSAGEM SIMPLES ---
+        # O frontend vai chamar fetchParts() de qualquer maneira
+        return {"message": "Peça atualizada com sucesso."}
+        
+    except IntegrityError as e:
+        await db.rollback()
+        logging.warning(f"Erro de integridade ao atualizar peça: {e}")
+        if "unique constraint failed: parts.serial_number" in str(e).lower():
+             raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, 
+                detail=f"O número de série '{serial_number}' já está em uso por outra peça."
+            )
+        raise HTTPException(status_code=500, detail=f"Erro de integridade no banco: {e}")
+        
     except Exception as e: 
         await db.rollback()
+        # Não vamos mais pegar o MissingGreenlet, mas mantemos o log
+        logging.error(f"Erro genérico ao atualizar peça: {e}", exc_info=True) 
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar peça: {e}")
-
+    
 @router.get("/", response_model=List[PartListPublic])
 async def read_parts(
     db: AsyncSession = Depends(deps.get_db),

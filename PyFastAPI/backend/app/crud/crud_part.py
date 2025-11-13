@@ -36,30 +36,35 @@ def log_transaction(
 
 
 async def create_inventory_items(
-    db: AsyncSession, *, part: Part, quantity: int, user_id: int, notes: Optional[str] = None
+    db: AsyncSession, *, part_id: int, organization_id: int, quantity: int, user_id: int, notes: Optional[str] = None
 ) -> List[InventoryItem]:
+# --- FIM DA MODIFICAÇÃO 1 ---
+
     logging.warning(f"ID DA SESSÃO NO CRUD: {id(db)}")
     """Cria itens e os adiciona à sessão, sem commit ou flush."""
     new_items = []
     for _ in range(quantity):
+        
+        # --- 2. USAR OS PARÂMETROS DE ID DIRETAMENTE ---
         new_item = InventoryItem(
-            part_id=part.id,
-            organization_id=part.organization_id,
+            part_id=part_id,                 # ANTES: part.id
+            organization_id=organization_id, # ANTES: part.organization_id
             status=InventoryItemStatus.DISPONIVEL
         )
+        # --- FIM DA MODIFICAÇÃO 2 ---
+        
         db.add(new_item)
         new_items.append(new_item)
     
     await db.flush() 
 
     for new_item in new_items:
-        # --- 2. CORREÇÃO: Remover 'await' ---
         log = log_transaction(
-            db=db, item_id=new_item.id, part_id=part.id, user_id=user_id,
+            db=db, item_id=new_item.id, part_id=part_id, user_id=user_id, # ANTES: part_id=part.id
             transaction_type=TransactionType.ENTRADA,
             notes=notes or "Entrada de novo item"
         )
-        db.add(log) # Adiciona o log aqui
+        db.add(log)
         
     return new_items
 
@@ -251,17 +256,19 @@ async def create(db: AsyncSession, *, part_in: PartCreate, organization_id: int,
     await db.flush() # Isso já popula o db_obj.id
 
     if initial_quantity and initial_quantity > 0:
+        
+        # --- 3. MODIFICAR A CHAMADA DESTA FUNÇÃO ---
         await create_inventory_items(
             db=db,
-            part=db_obj, # Passa o db_obj com o ID
+            part_id=db_obj.id,           # ANTES: part=db_obj
+            organization_id=organization_id, # ANTES: (não existia, era pego de part.organization_id)
             quantity=initial_quantity,
             user_id=user_id,
             notes=f"Carga inicial de {initial_quantity} itens no sistema."
         )
+        # --- FIM DA MODIFICAÇÃO 3 ---
     
-    # await db.refresh(db_obj) # <--- REMOVA ESTA LINHA. ELA CAUSA O ERRO.
-    
-    return db_obj # Retorna o objeto (com ID) para o endpoint
+    return db_obj
 
 async def update(db: AsyncSession, *, db_obj: Part, obj_in: PartUpdate, photo_url: Optional[str], invoice_url: Optional[str]) -> Part:
     """Atualiza uma Part (Corrigido: Sem commit)."""

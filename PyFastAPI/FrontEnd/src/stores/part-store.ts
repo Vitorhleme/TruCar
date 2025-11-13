@@ -120,16 +120,20 @@ export const usePartStore = defineStore('part', {
       this.isLoading = true;
       try {
         const payload = { quantity, notes };
-        // 1. O frontend chama a API
-        const response = await api.post<Part>(`/parts/${partId}/add-items`, payload);
+        // 1. O frontend chama a API. 
+        // Não precisamos da 'response' pois o backend só retorna uma mensagem.
+        await api.post(`/parts/${partId}/add-items`, payload);
         
-        // 2. 'response.data' AGORA É um objeto Part, e 'response.data.stock' tem o novo valor (ex: 44)
-        const index = this.parts.findIndex(p => p.id === partId);
-        if (index !== -1) {
-          // 3. O estoque local é atualizado, e a UI (ex: 44/15) é renderizada corretamente
-          this.parts[index]!.stock = response.data.stock;
-        }
+        // 2. 'response.data.stock' não existe mais e estava causando o bug.
+        // const index = this.parts.findIndex(p => p.id === partId);
+        // if (index !== -1) {
+          // 3. REMOVER ESTA LINHA (A CAUSA DO BUG)
+          // this.parts[index]!.stock = response.data.stock;
+        // }
         
+        // 4. SOLUÇÃO: Recarregar a lista do zero, igual createPart e updatePart fazem.
+        await this.fetchParts();
+
         Notify.create({ type: 'positive', message: `${quantity} itens adicionados com sucesso!` });
         return true;
       } catch (error) {
