@@ -4,6 +4,7 @@ __pycache__/
 *.pyo
 *.pyd
 */venv/*
+.quasar
 *./venv
 /backend/.venv
 */node_modules

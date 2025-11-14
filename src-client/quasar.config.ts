@@ -1,11 +1,9 @@
-// Configuration for your app
-// https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
-
 import { defineConfig } from '#q-app/wrappers';
 
 export default defineConfig((/* ctx */) => {
   return {
-    // ... (boot, css, extras, build... tudo como está) ...
+    // REMOVI O BLOCO sourceFiles DAQUI
+
     boot: ['axios', 'apexcharts'],
 
     css: ['app.scss'],
@@ -38,29 +36,15 @@ export default defineConfig((/* ctx */) => {
       ],
     },
 
-    // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#devserver
     devServer: {
-      // https: true,
-      open: true, // opens browser window automatically
-
-      // --- CORREÇÃO AQUI ---
-      // Remova o bloco 'proxy' que adicionamos.
-      // proxy: {
-      //   '/api': {
-      //     target: 'http://localhost:8000',
-      //     changeOrigin: true,
-      //   },
-      // },
-      // --- FIM DA CORREÇÃO ---
+      open: true,
     },
 
-    // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#framework
     framework: {
       config: {},
       plugins: ['Notify', 'Dialog'],
     },
 
-    // ... (animations, ssr, pwa, cordova, capacitor, electron, bex... tudo como está) ...
     animations: [],
 
     ssr: {
