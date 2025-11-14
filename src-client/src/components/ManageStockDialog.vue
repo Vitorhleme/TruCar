@@ -191,7 +191,7 @@ async function handleSubmit() {
     if (success) {
       emit('update:modelValue', false);
     }
-  } catch (error) { // Corrigido de '_error' para 'err' para ser mais explícito
+  } catch { // Corrigido de '_error' para 'err' para ser mais explícito
      Notify.create({ type: 'negative', message: 'Ocorreu um erro inesperado.' });
   }
 }

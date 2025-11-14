@@ -15,7 +15,8 @@ from app.models.notification_model import NotificationType
 # --- 1. ATUALIZAR IMPORTS ---
 from app.schemas.part_schema import (
     PartPublic, PartCreate, PartUpdate, 
-    InventoryItemPublic, PartListPublic, InventoryItemDetails
+    InventoryItemPublic, PartListPublic, InventoryItemDetails,
+    InventoryItemPage, InventoryItemRow # <-- Adicionar estes
 )
 # --- FIM DA ATUALIZAÇÃO ---
 from app.schemas.inventory_transaction_schema import TransactionPublic
@@ -288,6 +289,33 @@ async def read_item_details(
         raise HTTPException(status_code=404, detail="Item de inventário não encontrado.")
     return item
 # --- FIM DO NOVO ENDPOINT ---
+
+@router.get("/inventory/items/", response_model=InventoryItemPage)
+async def read_all_inventory_items(
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_manager),
+    skip: int = 0,
+    limit: int = 20,
+    status: Optional[InventoryItemStatus] = None,
+    part_id: Optional[int] = None,
+    vehicle_id: Optional[int] = None,
+    search: Optional[str] = None
+):
+    """
+    Obtém uma lista paginada de todos os itens de inventário individuais
+    com filtros para a página mestre de rastreabilidade.
+    """
+    result = await crud_part.get_all_items_paginated(
+        db=db,
+        organization_id=current_user.organization_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        part_id=part_id,
+        vehicle_id=vehicle_id,
+        search=search
+    )
+    return result
 
 @router.get("/{part_id}/items", response_model=List[InventoryItemPublic])
 async def get_items_for_part(

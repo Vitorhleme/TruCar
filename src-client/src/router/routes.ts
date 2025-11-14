@@ -118,6 +118,12 @@ const routes: RouteRecordRaw[] = [
         meta: { roles: ['cliente_ativo', 'cliente_demo'] }
       },
       { 
+        path: 'inventory-items', // A nova URL
+        name: 'inventory-items', 
+        component: () => import('pages/InventoryItemsPage.vue'), // O novo arquivo de página
+        meta: { roles: ['cliente_ativo', 'cliente_demo'] }
+      },
+      { 
         path: 'inventory/item/:id', // :id é o ID global (ex: 11)
         name: 'item-details', 
         component: () => import('pages/ItemDetailsPage.vue'),

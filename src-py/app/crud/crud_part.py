@@ -8,7 +8,7 @@ import datetime
 from app.models.vehicle_component_model import VehicleComponent
 from app.models.vehicle_cost_model import VehicleCost, CostType
 from app.models.inventory_transaction_model import InventoryTransaction
-
+from app.models.vehicle_model import Vehicle 
 from app.crud.crud_user import count_by_org
 from app.models.part_model import Part, InventoryItem, InventoryItemStatus, PartCategory
 from . import crud_inventory_transaction as crud_transaction
@@ -32,6 +32,9 @@ def log_transaction(
 
 
 # --- CORREÇÃO 1: Lógica do item_identifier ---
+
+
+
 async def create_inventory_items(
     db: AsyncSession, *, part_id: int, organization_id: int, quantity: int, user_id: int, notes: Optional[str] = None
 ) -> List[InventoryItem]:
@@ -82,6 +85,66 @@ async def get_item_by_id(db: AsyncSession, *, item_id: int, organization_id: int
     )
     result = await db.execute(stmt)
     return result.scalars().first()
+
+async def get_all_items_paginated(
+    db: AsyncSession, *, 
+    organization_id: int, 
+    skip: int, 
+    limit: int, 
+    status: Optional[InventoryItemStatus] = None, 
+    part_id: Optional[int] = None, 
+    vehicle_id: Optional[int] = None,
+    search: Optional[str] = None
+):
+    """
+    Busca todos os InventoryItems de forma paginada, com filtros.
+    """
+    
+    # Query base para os itens
+    stmt = select(InventoryItem).where(
+        InventoryItem.organization_id == organization_id
+    ).options(
+        selectinload(InventoryItem.part), # Carrega o template (Part)
+        selectinload(InventoryItem.installed_on_vehicle) # Carrega o Veículo
+    )
+    
+    # Query base para a contagem
+    count_stmt = select(func.count()).select_from(InventoryItem).where(
+        InventoryItem.organization_id == organization_id
+    )
+
+    # Aplicar filtros
+    if status:
+        stmt = stmt.where(InventoryItem.status == status)
+        count_stmt = count_stmt.where(InventoryItem.status == status)
+    if part_id:
+        stmt = stmt.where(InventoryItem.part_id == part_id)
+        count_stmt = count_stmt.where(InventoryItem.part_id == part_id)
+    if vehicle_id:
+        stmt = stmt.where(InventoryItem.installed_on_vehicle_id == vehicle_id)
+        count_stmt = count_stmt.where(InventoryItem.installed_on_vehicle_id == vehicle_id)
+    
+    # Aplicar filtro de busca (procura no nome da Peça)
+    if search:
+        search_term = f"%{search.lower()}%"
+        
+        # Faz o join com a tabela Part para poder filtrar pelo nome
+        stmt = stmt.join(Part, Part.id == InventoryItem.part_id)
+        count_stmt = count_stmt.join(Part, Part.id == InventoryItem.part_id)
+        
+        stmt = stmt.where(Part.name.ilike(search_term))
+        count_stmt = count_stmt.where(Part.name.ilike(search_term))
+
+    # Obter a contagem total (antes de paginar)
+    total = (await db.execute(count_stmt)).scalar_one_or_none() or 0
+    
+    # Obter os itens com paginação e ordenação
+    items = (await db.execute(
+        stmt.order_by(InventoryItem.part_id, InventoryItem.item_identifier)
+            .offset(skip).limit(limit)
+    )).scalars().all()
+    
+    return {"total": total, "items": items}
 
 # --- NOVO: Função para a Página de Detalhes ---
 async def get_item_with_details(db: AsyncSession, *, item_id: int, organization_id: int) -> Optional[InventoryItem]:

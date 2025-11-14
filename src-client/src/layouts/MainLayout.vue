@@ -319,61 +319,64 @@ function getDriverMenu(): MenuCategory[] {
 
 
 function getManagerMenu(): MenuCategory[] {
-// ... (função igual)
-    const sector = authStore.userSector;
-    const menu: MenuCategory[] = [];
+const sector = authStore.userSector;
+const menu: MenuCategory[] = [];
 
-    const general: MenuCategory = {
-        label: 'Geral', icon: 'dashboard',
-        children: [
-            { title: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
-            { title: 'Mapa em Tempo Real', icon: 'map', to: '/live-map' },
-        ]
-    };
-    menu.push(general);
+const general: MenuCategory = {
+ label: 'Geral', icon: 'dashboard',
+children: [
+ { title: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
+ { title: 'Mapa em Tempo Real', icon: 'map', to: '/live-map' },
+ ]
+ };
+ menu.push(general);
 
-    const operations: MenuCategory = { label: 'Operações', icon: 'alt_route', children: [] as MenuItem[] };
-    if (sector === 'agronegocio' || sector === 'servicos') {
-        operations.children.push({ title: terminologyStore.journeyPageTitle, icon: 'route', to: '/journeys' });
-    }
-    if (sector === 'frete') {
-        operations.children.push({ title: 'Ordens de Frete', icon: 'list_alt', to: '/freight-orders' });
-    }
-    if (operations.children.length > 0) {
-        menu.push(operations);
-    }
+ const operations: MenuCategory = { label: 'Operações', icon: 'alt_route', children: [] as MenuItem[] };
+ if (sector === 'agronegocio' || sector === 'servicos') {
+operations.children.push({ title: terminologyStore.journeyPageTitle, icon: 'route', to: '/journeys' });
+ }
+ if (sector === 'frete') {
+operations.children.push({ title: 'Ordens de Frete', icon: 'list_alt', to: '/freight-orders' });
+ }
+ if (operations.children.length > 0) {
+ menu.push(operations);
+}
 
-    const management: MenuCategory = { label: 'Gestão', icon: 'settings_suggest', children: [] as MenuItem[] };
-    if (sector === 'agronegocio' || sector === 'servicos' || sector === 'frete') {
-        management.children.push({ title: terminologyStore.vehiclePageTitle, icon: 'local_shipping', to: '/vehicles' });
-    }
-    if (sector === 'agronegocio') {
-        management.children.push({ title: 'Implementos', icon: 'precision_manufacturing', to: '/implements' });
-    }
-    if (sector === 'frete') {
-        management.children.push({ title: 'Clientes', icon: 'groups', to: '/clients' });
-    }
-    management.children.push({ title: 'Gestão de Utilizadores', icon: 'manage_accounts', to: '/users' });
-    management.children.push({ title: 'Inventário', icon: 'inventory_2', to: '/parts' });
-    management.children.push({ title: 'Gestão de Custos', icon: 'monetization_on', to: '/costs' });
-    management.children.push({ title: 'Abastecimentos', icon: 'local_gas_station', to: '/fuel-logs' });
-    management.children.push({ title: 'Documentos', icon: 'folder_shared', to: '/documents' });
-    if (management.children.length > 0) {
-        menu.push(management);
-    }
+ const management: MenuCategory = { label: 'Gestão', icon: 'settings_suggest', children: [] as MenuItem[] };
+ if (sector === 'agronegocio' || sector === 'servicos' || sector === 'frete') {
+ management.children.push({ title: terminologyStore.vehiclePageTitle, icon: 'local_shipping', to: '/vehicles' });
+ }
+if (sector === 'agronegocio') {
+management.children.push({ title: 'Implementos', icon: 'precision_manufacturing', to: '/implements' });
+ }
+ if (sector === 'frete') {
+ management.children.push({ title: 'Clientes', icon: 'groups', to: '/clients' });
+ }
+ management.children.push({ title: 'Gestão de Utilizadores', icon: 'manage_accounts', to: '/users' }); 
+ // --- CORREÇÃO AQUI ---
+ management.children.push({ title: 'Templates de Peças', icon: 'inventory_2', to: '/parts' });
+ management.children.push({ title: 'Rastreabilidade', icon: 'manage_search', to: '/inventory-items' });
+ // --- FIM DA CORREÇÃO ---
 
-    const analysis: MenuCategory = {
-        label: 'Análise', icon: 'analytics',
-        children: [
-            { title: 'Ranking de Motoristas', icon: 'leaderboard', to: '/performance' },
-            { title: 'Relatórios', icon: 'summarize', to: '/reports' },
-            { title: 'Manutenções', icon: 'build', to: '/maintenance' },
-            { title: 'Gestão de Multas', icon: 'receipt_long', to: '/fines' },
-        ]
-    };
-    menu.push(analysis);
-    
-    return menu;
+ management.children.push({ title: 'Gestão de Custos', icon: 'monetization_on', to: '/costs' });
+ management.children.push({ title: 'Abastecimentos', icon: 'local_gas_station', to: '/fuel-logs' });
+ management.children.push({ title: 'Documentos', icon: 'folder_shared', to: '/documents' });
+ if (management.children.length > 0) {
+menu.push(management);
+ }
+
+const analysis: MenuCategory = {
+label: 'Análise', icon: 'analytics',
+children: [
+{ title: 'Ranking de Motoristas', icon: 'leaderboard', to: '/performance' },
+ { title: 'Relatórios', icon: 'summarize', to: '/reports' },
+ { title: 'Manutenções', icon: 'build', to: '/maintenance' },
+ { title: 'Gestão de Multas', icon: 'receipt_long', to: '/fines' },
+ ]
+ };
+ menu.push(analysis);
+
+ return menu;
 }
 
 
