@@ -3,11 +3,10 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-/venv/
-/.venv/
-/backend/venv/
-/backend/.venv/
-/frontend/node_modules/
+*/venv/*
+*./venv
+/backend/.venv
+*/node_modules
 /frontend/dist/
 /frontend/.quasar/
 /frontend/.quasar-testing/
