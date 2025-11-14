@@ -1,13 +1,21 @@
 import type { Part } from './part-models';
 import type { InventoryTransaction } from './inventory-transaction-models';
-import type { Vehicle } from './vehicle-models'; // <-- 1. IMPORTAR VEHICLE
+import type { Vehicle } from './vehicle-models';
 
-export type InventoryItemStatus = "Disponível" | "Em Uso" | "Fim de Vida";
+// --- ESTA É A CORREÇÃO ---
+// Trocamos 'export type' por 'export enum' para que
+// ele exista como um objeto JavaScript no runtime.
+export enum InventoryItemStatus {
+  DISPONIVEL = "Disponível",
+  EM_USO = "Em Uso",
+  FIM_DE_VIDA = "Fim de Vida",
+}
+// --- FIM DA CORREÇÃO ---
 
 export interface InventoryItem {
   id: number;
   item_identifier: number;
-  status: InventoryItemStatus;
+  status: InventoryItemStatus; // Agora se refere ao enum
   part_id: number;
   installed_on_vehicle_id: number | null;
   created_at: string;
@@ -20,7 +28,6 @@ export interface InventoryItemDetails extends InventoryItem {
   transactions: InventoryTransaction[];
 }
 
-// --- 2. ADICIONAR ESTAS INTERFACES ---
 // Para a nova página (InventoryItemsPage.vue)
 export interface InventoryItemRow extends InventoryItem {
   // 'part' já está no InventoryItem, mas aqui forçamos a não ser nulo
@@ -33,4 +40,3 @@ export interface InventoryItemPage {
   total: number;
   items: InventoryItemRow[]; // Note que aqui é InventoryItemRow
 }
-// --- FIM DAS ADIÇÕES ---

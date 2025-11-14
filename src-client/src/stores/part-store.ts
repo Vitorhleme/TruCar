@@ -7,11 +7,12 @@ import type { InventoryTransaction } from 'src/models/inventory-transaction-mode
 // --- 1. IMPORTAR O NOVO MODELO ---
 import type { 
   InventoryItem, 
-  InventoryItemStatus, 
   InventoryItemDetails, 
   InventoryItemPage, // <-- Adicionado
   InventoryItemRow  // <-- Adicionado
 } from 'src/models/inventory-item-models';
+import { InventoryItemStatus } from 'src/models/inventory-item-models';
+
 
 export interface PartCreatePayload extends PartCreate {
   photo_file?: File | null;
@@ -213,7 +214,10 @@ export const usePartStore = defineStore('part', {
       this.availableItems = [];
       try {
         const response = await api.get<InventoryItem[]>(`/parts/${partId}/items`, {
-          params: { status: 'Disponível' }
+          params: { 
+            // Substitua a string hardcoded pelo Enum
+            status: InventoryItemStatus.DISPONIVEL 
+          }
         });
         this.availableItems = response.data;
       } catch {
@@ -222,7 +226,6 @@ export const usePartStore = defineStore('part', {
         this.isItemsLoading = false;
       }
     },
-
     async fetchHistory(partId: number) {
       this.isHistoryLoading = true;
       this.selectedPartHistory = [];

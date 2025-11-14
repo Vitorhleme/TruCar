@@ -373,6 +373,7 @@ import { useMaintenanceStore } from 'stores/maintenance-store';
 import { useTireStore } from 'stores/tire-store';
 
 // Models
+import { InventoryItemStatus } from 'src/models/inventory-item-models'; // <-- ADICIONE ESTA IMPORTAÇÃO
 import type { VehicleComponent } from 'src/models/vehicle-component-models';
 import type { InventoryTransaction } from 'src/models/inventory-transaction-models';
 import type { Part } from 'src/models/part-models';
@@ -808,7 +809,7 @@ function confirmDiscard(component: VehicleComponent) {
             // Precisamos do item_id
             const item_id = component.inventory_transaction?.item?.id;
             if (item_id) {
-               const success = await partStore.setItemStatus(component.part.id, item_id, 'Fim de Vida', undefined, "Descartado pelo gerenciador de componentes.");
+               const success = await partStore.setItemStatus(component.part.id, item_id, InventoryItemStatus.FIM_DE_VIDA, undefined, "Descartado pelo gerenciador de componentes.");
                if (success) await refreshAllVehicleData();
             } else {
               $q.notify({ type: 'negative', message: 'Erro: Não foi possível encontrar o ID do item de inventário associado.' });

@@ -82,8 +82,9 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { usePartStore } from 'stores/part-store';
-import type { InventoryItemStatus } from 'src/models/inventory-item-models';
+import { InventoryItemStatus } from 'src/models/inventory-item-models'; // <-- ADICIONE ESTA IMPORTAÇÃO
 import type { QTableProps } from 'quasar';
+
 
 const partStore = usePartStore();
 
@@ -96,9 +97,9 @@ const filters = ref({
 });
 
 const statusOptions: { label: string, value: InventoryItemStatus }[] = [
-  { label: 'Disponível', value: 'Disponível' },
-  { label: 'Em Uso', value: 'Em Uso' },
-  { label: 'Fim de Vida', value: 'Fim de Vida' },
+  { label: 'Disponível', value: InventoryItemStatus.DISPONIVEL },
+  { label: 'Em Uso', value: InventoryItemStatus.EM_USO },
+  { label: 'Fim de Vida', value: InventoryItemStatus.FIM_DE_VIDA },
 ];
 
 // Paginação (controlada pelo servidor)

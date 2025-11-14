@@ -1,13 +1,17 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, cast, Integer
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 
 from app.models.maintenance_model import MaintenanceRequest, MaintenanceComment
 from app.models.vehicle_model import Vehicle
 from app.models.user_model import User
-from app.schemas.maintenance_schema import MaintenanceRequestCreate, MaintenanceRequestUpdate, MaintenanceCommentCreate
-
+from app.models.part_model import Part, InventoryItem # <-- 1. IMPORTAR MODELOS
+from app.schemas.maintenance_schema import ( # <-- 2. IMPORTAR NOVOS SCHEMAS
+    MaintenanceRequestCreate, MaintenanceRequestUpdate, MaintenanceCommentCreate,
+    ReplaceComponentPayload, ReplaceComponentResponse
+)
+from app.crud import crud_part
 # --- CRUD para Solicitações de Manutenção ---
 
 async def create_request(
@@ -23,6 +27,91 @@ async def create_request(
     await db.commit()
     await db.refresh(db_obj, ["reporter", "vehicle", "comments", "approver"])
     return db_obj
+
+
+async def replace_component_atomic(
+    db: AsyncSession, 
+    *, 
+    request_id: int, 
+    payload: ReplaceComponentPayload, 
+    user: User
+) -> ReplaceComponentResponse:
+    """
+    Executa a substituição de um componente de forma atômica (sem commit).
+    1. Remove o item antigo (muda status).
+    2. Instala o item novo (muda status e associa ao veículo).
+    3. Adiciona um comentário de log no chamado.
+    """
+    
+    # 1. Validar o chamado e obter o veículo
+    request = await get_request(db, request_id=request_id, organization_id=user.organization_id)
+    if not request:
+        raise ValueError("Chamado de manutenção não encontrado.")
+    if not request.vehicle:
+        raise ValueError("Chamado não está associado a um veículo.")
+        
+    vehicle_id = request.vehicle.id
+    organization_id = user.organization_id
+
+    # 2. Obter o item antigo (que está saindo)
+    old_item = await crud_part.get_item_by_id(db, item_id=payload.old_item_id, organization_id=organization_id)
+    if not old_item or old_item.status != "Em Uso":
+        raise ValueError(f"Item antigo (ID: {payload.old_item_id}) não encontrado ou não está 'Em Uso'.")
+
+    # 3. Obter o item novo (que está entrando)
+    new_item = await crud_part.get_item_by_id(db, item_id=payload.new_item_id, organization_id=organization_id)
+    if not new_item or new_item.status != "Disponível":
+        raise ValueError(f"Item novo (ID: {payload.new_item_id}) não encontrado ou não está 'Disponível'.")
+        
+    # 4. Obter nomes das peças (para o log)
+    old_part_name = old_item.part.name
+    old_item_identifier = old_item.item_identifier
+    new_part_name = new_item.part.name
+    new_item_identifier = new_item.item_identifier
+
+    # 5. Mudar status do ITEM ANTIGO (Remoção)
+    # Usamos a função `change_item_status` que já corrigimos (ela não commita, só usa flush)
+    await crud_part.change_item_status(
+        db=db,
+        item=old_item,
+        new_status=payload.old_item_status,
+        user_id=user.id,
+        vehicle_id=vehicle_id, # Passa o ID do veículo para o log de remoção
+        notes=f"Removido via Chamado #{request_id}. {payload.notes or ''}".strip()
+    )
+
+    # 6. Mudar status do ITEM NOVO (Instalação)
+    await crud_part.change_item_status(
+        db=db,
+        item=new_item,
+        new_status="Em Uso",
+        user_id=user.id,
+        vehicle_id=vehicle_id, # Associa ao veículo
+        notes=f"Instalado via Chamado #{request_id}. {payload.notes or ''}".strip()
+    )
+    
+    # 7. Criar o comentário de log
+    comment_text = (
+        f"Substituição de componente realizada por {user.full_name}:\n"
+        f"- [SAIU] {old_part_name} (Cód. {old_item_identifier}) | Status: {payload.old_item_status.value}\n"
+        f"- [ENTROU] {new_part_name} (Cód. {new_item_identifier}) | Status: Em Uso"
+    )
+    
+    comment_schema = MaintenanceCommentCreate(comment_text=comment_text)
+    
+    new_comment = await create_comment(
+        db=db,
+        comment_in=comment_schema,
+        request_id=request_id,
+        user_id=user.id,
+        organization_id=organization_id
+    )
+
+    return ReplaceComponentResponse(
+        message="Substituição realizada com sucesso.",
+        new_comment=new_comment
+    )
+
 
 async def get_request(
     db: AsyncSession, *, request_id: int, organization_id: int
@@ -44,15 +133,30 @@ async def get_all_requests(
 ) -> List[MaintenanceRequest]:
     """Busca todas as solicitações, carregando TODAS as relações necessárias."""
     stmt = select(MaintenanceRequest).where(MaintenanceRequest.organization_id == organization_id)
+    
     if search:
-        search_term = f"%{search}%"
+        search_term_text = f"%{search}%"
+        
+        # --- LÓGICA DE BUSCA ATUALIZADA ---
+        search_filters = [
+            MaintenanceRequest.problem_description.ilike(search_term_text),
+            Vehicle.brand.ilike(search_term_text),
+            Vehicle.model.ilike(search_term_text)
+        ]
+        
+        try:
+            # Tenta converter o 'search' para um número
+            search_id = int(search)
+            # Se conseguir, adiciona a busca pelo ID do chamado
+            search_filters.append(MaintenanceRequest.id == search_id)
+        except ValueError:
+            pass # Não é um número, continua a busca por texto
+
         stmt = stmt.join(MaintenanceRequest.vehicle).where(
-            or_(
-                MaintenanceRequest.problem_description.ilike(search_term),
-                Vehicle.brand.ilike(search_term),
-                Vehicle.model.ilike(search_term)
-            )
+            or_(*search_filters)
         )
+        # --- FIM DA LÓGICA ATUALIZADA ---
+
     stmt = stmt.order_by(MaintenanceRequest.created_at.desc()).offset(skip).limit(limit).options(
         selectinload(MaintenanceRequest.reporter),
         selectinload(MaintenanceRequest.approver),

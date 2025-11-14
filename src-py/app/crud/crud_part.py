@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, update as sa_update
+from sqlalchemy import select, func, or_, cast, Integer, update as sa_update
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 import logging
@@ -113,7 +113,7 @@ async def get_all_items_paginated(
         InventoryItem.organization_id == organization_id
     )
 
-    # Aplicar filtros
+    # Aplicar filtros (status, partId, vehicleId permanecem iguais)
     if status:
         stmt = stmt.where(InventoryItem.status == status)
         count_stmt = count_stmt.where(InventoryItem.status == status)
@@ -124,16 +124,32 @@ async def get_all_items_paginated(
         stmt = stmt.where(InventoryItem.installed_on_vehicle_id == vehicle_id)
         count_stmt = count_stmt.where(InventoryItem.installed_on_vehicle_id == vehicle_id)
     
-    # Aplicar filtro de busca (procura no nome da Peça)
+    # Aplicar filtro de busca (procura no nome da Peça OU IDs)
     if search:
-        search_term = f"%{search.lower()}%"
+        search_term_text = f"%{search.lower()}%"
         
         # Faz o join com a tabela Part para poder filtrar pelo nome
         stmt = stmt.join(Part, Part.id == InventoryItem.part_id)
         count_stmt = count_stmt.join(Part, Part.id == InventoryItem.part_id)
         
-        stmt = stmt.where(Part.name.ilike(search_term))
-        count_stmt = count_stmt.where(Part.name.ilike(search_term))
+        # --- LÓGICA DE BUSCA ATUALIZADA ---
+        search_filters = [
+            Part.name.ilike(search_term_text) # Busca por nome da peça
+        ]
+        
+        try:
+            # Tenta converter o 'search' para um número
+            search_id = int(search)
+            # Se conseguir, adiciona busca pelo ID Global (item.id)
+            search_filters.append(InventoryItem.id == search_id)
+            # E também pelo Cód. Item (item_identifier)
+            search_filters.append(InventoryItem.item_identifier == search_id)
+        except ValueError:
+            pass # Não é um número, continua a busca por texto
+
+        stmt = stmt.where(or_(*search_filters))
+        count_stmt = count_stmt.where(or_(*search_filters))
+        # --- FIM DA LÓGICA ATUALIZADA ---
 
     # Obter a contagem total (antes de paginar)
     total = (await db.execute(count_stmt)).scalar_one_or_none() or 0
@@ -145,7 +161,6 @@ async def get_all_items_paginated(
     )).scalars().all()
     
     return {"total": total, "items": items}
-
 # --- NOVO: Função para a Página de Detalhes ---
 async def get_item_with_details(db: AsyncSession, *, item_id: int, organization_id: int) -> Optional[InventoryItem]:
     """Busca um item serializado e seu histórico completo."""
@@ -362,10 +377,14 @@ async def get_items_for_part(
     if status:
         stmt = stmt.where(InventoryItem.status == status)
     
-    # --- CORREÇÃO 3: Ordenar pelo ID local ---
+    # --- A CORREÇÃO ESTÁ AQUI ---
+    # Adicionamos .options(selectinload(InventoryItem.part)) 
+    # para carregar os detalhes da peça (template) junto.
+    stmt = stmt.options(selectinload(InventoryItem.part))
+    # --- FIM DA CORREÇÃO ---
+
     items = (await db.execute(stmt.order_by(InventoryItem.item_identifier))).scalars().all()
     return items
-
 async def create(db: AsyncSession, *, part_in: PartCreate, organization_id: int, user_id: int, photo_url: Optional[str] = None, invoice_url: Optional[str] = None) -> Part:
     initial_quantity = part_in.initial_quantity
     part_data = part_in.model_dump(exclude={"initial_quantity"})

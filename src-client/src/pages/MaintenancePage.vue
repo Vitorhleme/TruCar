@@ -17,7 +17,7 @@
           dense
           debounce="300"
           v-model="searchTerm"
-          placeholder="Buscar por veículo, solicitante, problema..."
+          placeholder="Buscar por ID, veículo, solicitante, problema..."
         >
           <template v-slot:append><q-icon name="search" /></template>
         </q-input>
@@ -65,7 +65,10 @@
       </q-tab-panel>
     </q-tab-panels>
 
-    <ManagerActionDialog v-model="isDetailsDialogOpen" :request="selectedRequest" />
+    <MaintenanceDetailsDialog v
+      v-model="isDetailsDialogOpen" 
+      :request="selectedRequest" 
+    />
     <CreateRequestDialog v-model="isCreateDialogOpen" />
   </q-page>
 </template>
@@ -75,7 +78,9 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { useMaintenanceStore } from 'stores/maintenance-store';
 import { MaintenanceStatus, type MaintenanceRequest } from 'src/models/maintenance-models';
 import CreateRequestDialog from 'components/maintenance/CreateRequestDialog.vue';
-import ManagerActionDialog from 'components/maintenance/ManagerActionDialog.vue';
+// --- ### CORREÇÃO DO NOME DA IMPORTAÇÃO ### ---
+import MaintenanceDetailsDialog from 'components/maintenance/MaintenanceDetailsDialog.vue';
+// --- ### FIM DA CORREÇÃO ### ---
 import MaintenanceRequestCard from 'components/maintenance/MaintenanceRequestCard.vue';
 
 const maintenanceStore = useMaintenanceStore();

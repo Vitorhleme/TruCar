@@ -16,33 +16,88 @@
         </div>
       </q-card-section>
       
-      <q-scroll-area style="height: 400px;">
-        <q-card-section>
-          <q-list bordered separator>
-            <q-item><q-item-section><q-item-label caption>Veículo</q-item-label><q-item-label>{{ request.vehicle?.brand }} {{ request.vehicle?.model }} ({{ request.vehicle?.license_plate || request.vehicle?.identifier }})</q-item-label></q-item-section></q-item>
-            <q-item><q-item-section><q-item-label caption>Categoria</q-item-label><q-item-label>{{ request.category }}</q-item-label></q-item-section></q-item>
-            <q-item><q-item-section><q-item-label caption>Problema Reportado</q-item-label><q-item-label class="text-body2" style="white-space: pre-wrap;">{{ request.problem_description }}</q-item-label></q-item-section></q-item>
-          </q-list>
-        </q-card-section>
+      <q-tabs
+        v-model="tab"
+        dense
+        class="text-grey"
+        active-color="primary"
+        indicator-color="primary"
+        align="justify"
+        narrow-indicator
+      >
+        <q-tab name="details" label="Detalhes e Chat" />
+        <q-tab name="components" label="Componentes do Veículo" />
+      </q-tabs>
 
-        <q-card-section class="q-pt-none">
-          <div class="text-subtitle1 q-mb-sm">Histórico / Chat</div>
-          <q-chat-message
-            v-for="comment in request.comments"
-            :key="comment.id"
-            :name="comment.user.full_name"
-            :sent="comment.user.id === authStore.user?.id"
-            text-color="white"
-            :bg-color="comment.user.id === authStore.user?.id ? 'primary' : 'grey-7'"
-          >
-            <div>{{ comment.comment_text }}</div>
-          </q-chat-message>
-        </q-card-section>
-      </q-scroll-area>
-      
       <q-separator />
 
-      <q-card-section v-if="!isClosed" class="">
+      <q-tab-panels v-model="tab" animated>
+        <q-tab-panel name="details">
+          <q-scroll-area style="height: 400px;">
+            <q-card-section>
+              <q-list bordered separator>
+                <q-item><q-item-section><q-item-label caption>Veículo</q-item-label><q-item-label>{{ request.vehicle?.brand }} {{ request.vehicle?.model }} ({{ request.vehicle?.license_plate || request.vehicle?.identifier }})</q-item-label></q-item-section></q-item>
+                <q-item><q-item-section><q-item-label caption>Categoria</q-item-label><q-item-label>{{ request.category }}</q-item-label></q-item-section></q-item>
+                <q-item><q-item-section><q-item-label caption>Problema Reportado</q-item-label><q-item-label class="text-body2" style="white-space: pre-wrap;">{{ request.problem_description }}</q-item-label></q-item-section></q-item>
+              </q-list>
+            </q-card-section>
+
+            <q-card-section class="q-pt-none">
+              <div class="text-subtitle1 q-mb-sm">Histórico / Chat</div>
+              <q-chat-message
+                v-for="comment in request.comments"
+                :key="comment.id"
+                :name="comment.user.full_name"
+                :sent="comment.user.id === authStore.user?.id"
+                text-color="white"
+                :bg-color="comment.user.id === authStore.user?.id ? 'primary' : 'grey-7'"
+              >
+                <div style="white-space: pre-wrap;">{{ comment.comment_text }}</div>
+              </q-chat-message>
+            </q-card-section>
+          </q-scroll-area>
+        </q-tab-panel>
+
+        <q-tab-panel name="components">
+          <q-table
+            title="Componentes Atualmente Instalados"
+            :rows="componentStore.components"
+            :columns="componentColumns"
+            row-key="id"
+            :loading="componentStore.isLoading"
+            no-data-label="Nenhum componente ativo encontrado neste veículo."
+            flat
+            bordered
+            dense
+            style="height: 400px;"
+            virtual-scroll
+          >
+            <template v-slot:body-cell-component_and_item="props">
+              <q-td :props="props">
+                <div class="text-weight-medium">{{ props.row.part?.name || 'Peça N/A' }}</div>
+                <div class="text-caption text-grey">
+                  Cód. Item: {{ props.row.inventory_transaction?.item?.item_identifier || 'N/A' }}
+                </div>
+              </q-td>
+            </template>
+            
+            <template v-slot:body-cell-actions="props">
+              <q-td :props="props">
+                <q-btn
+                  label="Substituir"
+                  color="primary"
+                  flat dense
+                  @click="openReplaceDialog(props.row)"
+                  :disable="!authStore.isManager || isClosed"
+                />
+              </q-td>
+            </template>
+          </q-table>
+        </q-tab-panel>
+      </q-tab-panels>
+      <q-separator />
+
+      <q-card-section v-if="tab === 'details' && !isClosed" class="">
         <q-input v-model="newCommentText" outlined bg-color="" placeholder="Digite sua mensagem..." dense autogrow @keydown.enter.prevent="postComment">
           <template v-slot:after>
             <q-btn @click="postComment" round dense flat icon="send" color="primary" :disable="!newCommentText.trim()" />
@@ -50,20 +105,32 @@
         </q-input>
       </q-card-section>
 
-      <q-card-section v-else class="text-center text-grey-7 q-pa-lg">
+      <q-card-section v-if="isClosed" class="text-center text-grey-7 q-pa-lg">
         <q-icon name="lock" size="2em" />
         <div v-if="request.updated_at">Este chamado foi finalizado em {{ new Date(request.updated_at).toLocaleDateString('pt-BR') }} e não pode mais ser alterado.</div>
       </q-card-section>
     </q-card>
+
+    <ReplaceComponentDialog
+      v-model="isReplaceDialogOpen"
+      :maintenance-request="request"
+      :component-to-replace="selectedComponent"
+      @replacement-done="handleReplacementDone"
+    />
   </q-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { useQuasar } from 'quasar';
+import { ref, watch, computed } from 'vue'; // <-- Adicione o 'computed' aqui
+// --- ALTERAÇÃO DE IMPORT (ESLINT) ---
+import { useQuasar, type QTableColumn } from 'quasar'; 
+// --- FIM DA ALTERAÇÃO ---
 import { useMaintenanceStore } from 'stores/maintenance-store';
 import { useAuthStore } from 'stores/auth-store';
+import { useVehicleComponentStore } from 'stores/vehicle-component-store';
 import { MaintenanceStatus, type MaintenanceRequest, type MaintenanceRequestUpdate, type MaintenanceCommentCreate } from 'src/models/maintenance-models';
+import type { VehicleComponent } from 'src/models/vehicle-component-models';
+import ReplaceComponentDialog from './ReplaceComponentDialog.vue'; 
 
 const props = defineProps<{
   modelValue: boolean,
@@ -74,7 +141,18 @@ const emit = defineEmits(['update:modelValue']);
 const $q = useQuasar();
 const maintenanceStore = useMaintenanceStore();
 const authStore = useAuthStore();
+const componentStore = useVehicleComponentStore();
 const newCommentText = ref('');
+const tab = ref('details');
+
+const isReplaceDialogOpen = ref(false);
+const selectedComponent = ref<VehicleComponent | null>(null);
+
+const componentColumns: QTableColumn<VehicleComponent>[] = [
+  { name: 'component_and_item', label: 'Componente / Cód. Item', field: () => '', align: 'left', sortable: true },
+  { name: 'installation_date', label: 'Instalado em', field: 'installation_date', format: (val) => new Date(val).toLocaleDateString('pt-BR'), align: 'left', sortable: true },
+  { name: 'actions', label: 'Ações', field: () => '', align: 'center' }
+];
 
 const isClosed = computed(() => 
   props.request?.status === MaintenanceStatus.CONCLUIDA ||
@@ -87,6 +165,31 @@ async function postComment() {
   await maintenanceStore.addComment(props.request.id, payload);
   newCommentText.value = '';
 }
+
+function openReplaceDialog(component: VehicleComponent) {
+  selectedComponent.value = component;
+  isReplaceDialogOpen.value = true;
+}
+
+// Recarrega os componentes ativos após a substituição
+function handleReplacementDone() {
+  // --- CORREÇÃO (vehicle_id -> vehicle.id) ---
+  if (props.request?.vehicle?.id) {
+    void componentStore.fetchComponents(props.request.vehicle.id);
+  }
+  // --- FIM DA CORREÇÃO ---
+}
+
+// Carrega os componentes quando o diálogo abre ou o request muda
+watch(() => props.request, (newRequest) => {
+  // --- CORREÇÃO (vehicle_id -> vehicle.id) ---
+  if (newRequest?.vehicle?.id) {
+    void componentStore.fetchComponents(newRequest.vehicle.id);
+  }
+  // --- FIM DA CORREÇÃO ---
+  // Reseta para a aba de detalhes sempre que abrir
+  tab.value = 'details';
+}, { immediate: true });
 
 function handleUpdateStatus(newStatus: MaintenanceStatus) {
   if (!props.request) return;

@@ -1,5 +1,6 @@
   import type { User } from './auth-models';
   import type { Vehicle } from './vehicle-models';
+  import type { InventoryItemStatus } from './inventory-item-models'; // <-- 1. IMPORTAR ENUM
 
 export enum MaintenanceStatus {
   PENDENTE = 'PENDENTE',
@@ -23,6 +24,13 @@ export enum MaintenanceStatus {
     created_at: string;
     user: User;
   }
+
+  export interface ReplaceComponentPayload {
+  old_item_id: number;
+  new_item_id: number;
+  old_item_status: InventoryItemStatus; // Usa o Enum
+  notes?: string | null;
+}
 
   export interface MaintenanceRequest {
     id: number;

@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia';
 import { api } from 'boot/axios';
 import { Notify } from 'quasar';
-import type { MaintenanceRequest, MaintenanceRequestCreate, MaintenanceRequestUpdate, MaintenanceComment, MaintenanceCommentCreate } from 'src/models/maintenance-models';
+import type { 
+  MaintenanceRequest, MaintenanceRequestCreate, MaintenanceRequestUpdate, 
+  MaintenanceComment, MaintenanceCommentCreate,
+  ReplaceComponentPayload // <-- 1. IMPORTAR NOVO PAYLOAD
+} from 'src/models/maintenance-models';
+import { isAxiosError } from 'axios'; // <-- 2. IMPORTAR isAxiosError
 
 // Interface para os parâmetros de busca
 interface FetchMaintenanceParams {
@@ -57,16 +62,17 @@ export const useMaintenanceStore = defineStore('maintenance', {
     },
 
     async updateRequest(requestId: number, payload: MaintenanceRequestUpdate): Promise<void> {
-      try {
-        await api.put<MaintenanceRequest>(`/maintenance/${requestId}`, payload);
-        Notify.create({ type: 'positive', message: 'Status da solicitação atualizado!' });
-        await this.fetchMaintenanceRequests();
-      } catch (error) {
-        Notify.create({ type: 'negative', message: 'Erro ao atualizar solicitação.' });
-        throw error;
-      }
-    },
-    
+ try {
+        // --- CORREÇÃO AQUI ---
+ await api.put<MaintenanceRequest>(`/maintenance/${requestId}/status`, payload);
+        // --- FIM DA CORREÇÃO ---
+Notify.create({ type: 'positive', message: 'Status da solicitação atualizado!' });
+ await this.fetchMaintenanceRequests();
+ } catch (error) {
+Notify.create({ type: 'negative', message: 'Erro ao atualizar solicitação.' });
+ throw error;
+}
+},
     // --- FUNÇÃO CORRIGIDA ---
     async addComment(requestId: number, payload: MaintenanceCommentCreate): Promise<void> {
       try {
@@ -79,5 +85,30 @@ export const useMaintenanceStore = defineStore('maintenance', {
         throw error;
       }
     },
+    
+    async replaceComponent(requestId: number, payload: ReplaceComponentPayload): Promise<boolean> {
+      this.isLoading = true;
+      try {
+        // Usamos o novo endpoint
+        await api.post(`/maintenance/${requestId}/replace-component`, payload);
+        
+        // Recarregar os dados é crucial
+        // 1. Recarrega a lista principal (para pegar o novo comentário)
+        await this.fetchMaintenanceRequests();
+        // 2. Recarrega o chamado individual (caso a página de detalhes dependa disso)
+        await this.fetchRequestById(requestId);
+
+        return true;
+      } catch (error) {
+        const message = isAxiosError(error) 
+          ? error.response?.data?.detail 
+          : 'Erro ao substituir componente.';
+        Notify.create({ type: 'negative', message: message as string });
+        return false;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+    // --- FIM DA NOVA ACTION ---
   },
 });

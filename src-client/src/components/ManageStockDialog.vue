@@ -29,12 +29,14 @@
             v-if="formData.transaction_type === 'Saída para Uso' || formData.transaction_type === 'Fim de Vida'"
             outlined
             v-model="formData.item_id"
-            :options="availableItemOptions"
-            label="Selecionar Item (Código) *"
+            :options="filteredItemOptions"
+            label="Buscar por Cód. Item, ID Global ou Nome"
             :loading="partStore.isItemsLoading"
             :rules="[val => !!val || 'Selecione um item']"
             emit-value map-options
             options-dense
+            use-input
+            @filter="filterItems"
           >
             <!-- ADICIONADO: Slot para o link -->
             <template v-slot:option="scope">
@@ -80,20 +82,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
-import { useRouter } from 'vue-router'; // <-- 1. IMPORTAR ROUTER
+import { ref, watch, computed } from 'vue'; // <-- Adicione o 'computed' aqui
+import { useRouter } from 'vue-router';
 import { usePartStore } from 'stores/part-store';
 import { useVehicleStore } from 'stores/vehicle-store';
 import { useVehicleComponentStore } from 'stores/vehicle-component-store';
 import type { Part } from 'src/models/part-models';
 import type { TransactionType, TransactionCreate } from 'src/models/inventory-transaction-models';
-import type { InventoryItemStatus } from 'src/models/inventory-item-models';
+// 1. IMPORTAR O ENUM DE STATUS
+import { InventoryItemStatus } from 'src/models/inventory-item-models';
 import { Notify } from 'quasar';
 
 const props = defineProps<{ modelValue: boolean, part: Part | null }>();
 const emit = defineEmits(['update:modelValue']);
 
-const router = useRouter(); // <-- 2. INICIAR ROUTER
+const router = useRouter();
 const partStore = usePartStore();
 const vehicleStore = useVehicleStore();
 const componentStore = useVehicleComponentStore();
@@ -104,6 +107,9 @@ const formData = ref<Partial<TransactionCreate & { item_id: number | null }>>({}
 
 const vehicleOptions = ref<{label: string, value: number}[]>([]);
 
+// 2. RENOMEAR a lista de 'options' para ser uma 'ref'
+const filteredItemOptions = ref<{label: string, value: number}[]>([]);
+
 const filteredTransactionOptions = computed(() => {
   if (props.part?.category === 'Pneu') {
     return baseTransactionOptions.filter(opt => opt !== 'Saída para Uso');
@@ -111,26 +117,44 @@ const filteredTransactionOptions = computed(() => {
   return baseTransactionOptions;
 });
 
-// --- 3. CORREÇÃO: Usar 'item_identifier' no label ---
-const availableItemOptions = computed(() => {
-  return partStore.availableItems.map(item => ({
-    label: `Código: #${item.item_identifier} (Criado em: ${new Date(item.created_at).toLocaleDateString()})`,
-    value: item.id // O valor continua sendo o ID global
-  }));
-});
-// --- FIM DA CORREÇÃO ---
+// 3. ADICIONAR a nova função de filtro
+function filterItems(val: string, update: (callbackFn: () => void) => void) {
+  update(() => {
+    const needle = val.toLowerCase();
+    
+    // Filtra a lista completa da store
+    const options = partStore.availableItems
+      .filter(item => 
+        !val || // Mostra todos se o campo estiver vazio
+        String(item.item_identifier).includes(needle) // Procura pelo ID local
+      )
+      .map(item => ({
+        label: `Código: #${item.item_identifier} (Criado em: ${new Date(item.created_at).toLocaleDateString()})`,
+        value: item.id // O valor continua sendo o ID global
+      }));
 
-watch(() => props.modelValue, (isOpening) => {
+    filteredItemOptions.value = options;
+  });
+}
+
+// 4. ATUALIZAR 'watch' para popular o filtro inicial
+watch(() => props.modelValue, async (isOpening) => {
   if (isOpening && props.part) {
     formData.value = { quantity: 1, item_id: null, transaction_type: 'Entrada' };
     void vehicleStore.fetchAllVehicles({rowsPerPage: 9999});
-    void partStore.fetchAvailableItems(props.part.id);
+    // Aguarda os itens serem carregados
+    await partStore.fetchAvailableItems(props.part.id);
+    // Popula a lista de filtro inicial (mostrando todos)
+    filterItems('', (fn) => fn()); 
   }
 });
 
-watch(() => formData.value.transaction_type, (newType) => {
+// 5. ATUALIZAR 'watch' para popular o filtro ao trocar de tipo
+watch(() => formData.value.transaction_type, async (newType) => {
   if (props.part && (newType === 'Saída para Uso' || newType === 'Fim de Vida')) {
-    void partStore.fetchAvailableItems(props.part.id);
+    await partStore.fetchAvailableItems(props.part.id);
+    // Popula a lista de filtro inicial (mostrando todos)
+    filterItems('', (fn) => fn());
   }
 });
 
@@ -147,13 +171,10 @@ function filterVehicles (val: string, update: (callbackFn: () => void) => void) 
   });
 }
 
-// --- 4. ADICIONAR NOVA FUNÇÃO ---
 function goToItemDetails(itemId: number) {
-  // Fecha o popup (emit) e navega para a nova página
   emit('update:modelValue', false);
   void router.push({ name: 'item-details', params: { id: itemId } });
 }
-// --- FIM DA FUNÇÃO ---
 
 async function handleSubmit() {
   if (!props.part) return;
@@ -178,7 +199,8 @@ async function handleSubmit() {
         return;
       }
       
-      const newStatus: InventoryItemStatus = type === 'Saída para Uso' ? 'Em Uso' : 'Fim de Vida';
+      // 6. CORRIGIR o uso de strings para ENUM
+      const newStatus: InventoryItemStatus = type === 'Saída para Uso' ? InventoryItemStatus.EM_USO : InventoryItemStatus.FIM_DE_VIDA;
       const vehicleId = formData.value.related_vehicle_id;
       
       success = await partStore.setItemStatus(props.part.id, itemId, newStatus, vehicleId, notes);
@@ -191,7 +213,7 @@ async function handleSubmit() {
     if (success) {
       emit('update:modelValue', false);
     }
-  } catch { // Corrigido de '_error' para 'err' para ser mais explícito
+  } catch { 
      Notify.create({ type: 'negative', message: 'Ocorreu um erro inesperado.' });
   }
 }

@@ -10,8 +10,8 @@ from app import crud, deps
 from app.models.user_model import User, UserRole
 from app.schemas.maintenance_schema import (
     MaintenanceRequestPublic, MaintenanceRequestCreate, MaintenanceRequestUpdate,
-    MaintenanceCommentPublic, MaintenanceCommentCreate
-    
+    MaintenanceCommentPublic, MaintenanceCommentCreate,
+    ReplaceComponentPayload, ReplaceComponentResponse  # <-- 1. IMPORTAR NOVOS SCHEMAS
 )
 from app.models.notification_model import NotificationType
 
@@ -240,3 +240,56 @@ async def upload_attachment_file(
         shutil.copyfileobj(file.file, file_object)
         
     return {"file_url": f"/{file_location}"}
+
+@router.post("/{request_id}/replace-component", response_model=ReplaceComponentResponse)
+async def replace_maintenance_component(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    background_tasks: BackgroundTasks,
+    request_id: int,
+    payload: ReplaceComponentPayload,
+    current_user: User = Depends(deps.get_current_active_manager)
+):
+    """
+    Endpoint atômico para substituir um componente no contexto de um chamado.
+    """
+    try:
+        response = await crud.maintenance.replace_component_atomic(
+            db=db,
+            request_id=request_id,
+            payload=payload,
+            user=current_user
+        )
+        
+        # Se tudo deu certo nas funções CRUD (que usam flush), commitamos a transação.
+        await db.commit()
+        
+        # Recarregar o comentário com todas as relações (usuário)
+        await db.refresh(response.new_comment, ["user"])
+
+        # Notificar o motorista (em background)
+        request_obj = await crud.maintenance.get_request(db, request_id=request_id, organization_id=current_user.organization_id)
+        if request_obj:
+             background_tasks.add_task(
+                crud.notification.create_notification, db=db, message=response.new_comment.comment_text,
+                notification_type=NotificationType.MAINTENANCE_REQUEST_NEW_COMMENT,
+                organization_id=current_user.organization_id, user_id=request_obj.reported_by_id,
+                related_entity_type="maintenance_request", related_entity_id=request_id
+            )
+
+        return response
+
+    except ValueError as e:
+        # Se qualquer passo da lógica de negócio falhar, damos rollback
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        # Erro genérico
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno ao processar a substituição: {e}"
+        )

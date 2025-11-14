@@ -354,7 +354,7 @@ management.children.push({ title: 'Implementos', icon: 'precision_manufacturing'
  }
  management.children.push({ title: 'Gestão de Utilizadores', icon: 'manage_accounts', to: '/users' }); 
  // --- CORREÇÃO AQUI ---
- management.children.push({ title: 'Templates de Peças', icon: 'inventory_2', to: '/parts' });
+ management.children.push({ title: 'Inventário', icon: 'inventory_2', to: '/parts' });
  management.children.push({ title: 'Rastreabilidade', icon: 'manage_search', to: '/inventory-items' });
  // --- FIM DA CORREÇÃO ---
 
