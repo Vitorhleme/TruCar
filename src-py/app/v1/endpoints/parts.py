@@ -242,8 +242,20 @@ async def set_inventory_item_status(
     item = await crud_part.get_item_by_id(db, item_id=item_id, organization_id=current_user.organization_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item de inventário não encontrado.")
-    if item.status != InventoryItemStatus.DISPONIVEL:
-        raise HTTPException(status_code=400, detail=f"Item não está disponível (status atual: {item.status}).")
+    new_status = payload.new_status
+    current_status = item.status
+
+    if new_status == InventoryItemStatus.EM_USO:
+        if current_status != InventoryItemStatus.DISPONIVEL:
+            raise HTTPException(status_code=400, detail=f"Item não está 'Disponível' e não pode ser colocado em uso (status atual: {current_status}).")
+    
+    elif new_status == InventoryItemStatus.FIM_DE_VIDA:
+        if current_status not in [InventoryItemStatus.DISPONIVEL, InventoryItemStatus.EM_USO]:
+             raise HTTPException(status_code=400, detail=f"Item não pode ser descartado pois seu status é '{current_status}'. Somente itens 'Disponível' ou 'Em Uso' podem ser descartados.")
+    
+    elif current_status != InventoryItemStatus.DISPONIVEL:
+        # Bloqueio padrão para outras transições não mapeadas (ex: Manutenção)
+         raise HTTPException(status_code=400, detail=f"Não é possível alterar o status do item pois ele não está 'Disponível' (status atual: {current_status}).")
     try:
         updated_item = await crud_part.change_item_status(
             db=db, item=item, new_status=payload.new_status,

@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, update as sa_update
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 import logging
@@ -171,6 +171,21 @@ async def change_item_status(
     user_id: int, vehicle_id: Optional[int] = None, notes: Optional[str] = None
 ) -> InventoryItem:
     
+    # Validação de transição (lógica da nossa primeira correção)
+    current_status = item.status
+    if new_status == InventoryItemStatus.EM_USO:
+        if current_status != InventoryItemStatus.DISPONIVEL:
+            raise ValueError(f"Item não está 'Disponível' e não pode ser colocado em uso (status atual: {current_status}).")
+        
+    elif new_status == InventoryItemStatus.FIM_DE_VIDA:
+        if current_status not in [InventoryItemStatus.DISPONIVEL, InventoryItemStatus.EM_USO]:
+             raise ValueError(f"Item não pode ser descartado pois seu status é '{current_status}'.")
+    
+    elif current_status != InventoryItemStatus.DISPONIVEL:
+         raise ValueError(f"Não é possível alterar o status do item pois ele não está 'Disponível' (status atual: {current_status}).")
+
+
+    # Mapeamento do tipo de transação para o log
     transaction_type_map = {
         InventoryItemStatus.EM_USO: TransactionType.INSTALACAO,
         InventoryItemStatus.FIM_DE_VIDA: TransactionType.FIM_DE_VIDA
@@ -179,34 +194,58 @@ async def change_item_status(
     if new_status not in transaction_type_map:
         raise ValueError("Tipo de transação inválido para mudança de status.")
 
+    # Atualiza o item
     item.status = new_status
-    item.installed_on_vehicle_id = vehicle_id
-    item.installed_at = func.now() if vehicle_id else None
     
+    # Se for "Em Uso", associa ao veículo. Se for "Fim de Vida", desassocia.
+    if new_status == InventoryItemStatus.EM_USO:
+        item.installed_on_vehicle_id = vehicle_id
+        item.installed_at = func.now()
+    else:
+        # Remove a associação do veículo ao ser descartado
+        item.installed_on_vehicle_id = None
+        item.installed_at = None
+    
+    # Cria o registro de log
     log_entry = log_transaction( 
         db=db, item_id=item.id, part_id=item.part_id, user_id=user_id,
         transaction_type=transaction_type_map[new_status],
         notes=notes,
-        related_vehicle_id=vehicle_id
+        # Mantém o vehicle_id no log para rastreabilidade
+        related_vehicle_id=vehicle_id or item.installed_on_vehicle_id 
     )
     
     db.add(item)
+    db.add(log_entry) # Adiciona o log à sessão
+    
+    # --- LÓGICA DE CRIAÇÃO / DESATIVAÇÃO DO COMPONENTE ---
     
     if new_status == InventoryItemStatus.EM_USO and vehicle_id:
+        # Se está entrando "EM USO", cria um novo VehicleComponent
+        
+        # Garante que 'item.part' (o template) foi carregado
         part_template = item.part 
+        if not part_template:
+            # Carrega se não estiver presente (fallback, idealmente já vem carregado)
+            part_template = await db.get(Part, item.part_id)
+
         if part_template:
             new_component = VehicleComponent(
                 vehicle_id=vehicle_id,
                 part_id=part_template.id,
                 is_active=True,
-                installation_date=func.now()
+                installation_date=func.now(),
+                # Associa o componente diretamente à transação que o criou
+                inventory_transaction_id=log_entry.id 
             )
-            new_component.inventory_transaction = log_entry
-            db.add(log_entry)
+            # Precisamos salvar o log_entry primeiro para obter seu ID
+            await db.flush() # Salva o log_entry e o item para obter IDs
+            
+            new_component.inventory_transaction_id = log_entry.id
             db.add(new_component)
             
+            # Lógica para adicionar custo (como já existia)
             if part_template.value and part_template.value > 0:
-                # --- CORREÇÃO 2: Usar item_identifier na descrição do Custo ---
                 new_cost = VehicleCost(
                     description=f"Instalação: {part_template.name} (Cód. Item: {item.item_identifier})",
                     amount=part_template.value,
@@ -216,12 +255,36 @@ async def change_item_status(
                     organization_id=item.organization_id
                 )
                 db.add(new_cost)
-        else:
-            db.add(log_entry)
-    else:
-        db.add(log_entry)
+        
+    elif new_status == InventoryItemStatus.FIM_DE_VIDA:
+        # --- ESTA É A NOVA CORREÇÃO ---
+        # Se está indo para "FIM DE VIDA", desativa o VehicleComponent ativo
+        
+        # 1. Encontra a transação de instalação (INSTALACAO ou SAIDA_USO) mais recente deste item
+        install_transaction_stmt = select(InventoryTransaction.id).where(
+            InventoryTransaction.item_id == item.id,
+            or_(
+                InventoryTransaction.transaction_type == TransactionType.INSTALACAO,
+                InventoryTransaction.transaction_type == TransactionType.SAIDA_USO
+            )
+        ).order_by(InventoryTransaction.timestamp.desc()).limit(1)
+        
+        install_transaction_id = (await db.execute(install_transaction_stmt)).scalar_one_or_none()
+        
+        if install_transaction_id:
+            # 2. Desativa o VehicleComponent associado a essa transação
+            update_component_stmt = sa_update(VehicleComponent).where(
+                VehicleComponent.inventory_transaction_id == install_transaction_id,
+                VehicleComponent.is_active == True
+            ).values(
+                is_active = False,
+                uninstallation_date = func.now() # Define a data de remoção/descarte
+            )
+            await db.execute(update_component_stmt)
+            
+    # --- FIM DA CORREÇÃO ---
 
-    await db.flush()
+    await db.flush() # Salva todas as alterações pendentes
     return item
 
 async def get_simple(db: AsyncSession, *, part_id: int, organization_id: int) -> Optional[Part]:

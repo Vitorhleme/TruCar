@@ -179,11 +179,6 @@ export const usePartStore = defineStore('part', {
       try {
         const payload = { new_status: newStatus, related_vehicle_id: vehicleId, notes };
         await api.put(`/parts/items/${itemId}/set-status`, payload);
-
-        const index = this.parts.findIndex(p => p.id === partId);
-        if (index !== -1) {
-          this.parts[index]!.stock -= 1; 
-        }
         
         Notify.create({ type: 'positive', message: 'Status do item atualizado com sucesso!' });
         return true;
