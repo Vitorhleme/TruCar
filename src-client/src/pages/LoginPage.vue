@@ -104,7 +104,7 @@ import { useQuasar } from 'quasar';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from 'stores/auth-store';
 
-const loginCard = ref<HTMLElement | null>(null);
+const loginCard = ref<any>(null);
 const backgroundVideo = ref<HTMLVideoElement | null>(null);
 
 const $q = useQuasar();
@@ -144,7 +144,6 @@ async function handleLogin() {
     }, 2000);
   }
 }
-
 function handleMouseMove(event: MouseEvent) {
   const { clientX, clientY } = event;
   const width = window.innerWidth;
@@ -153,17 +152,18 @@ function handleMouseMove(event: MouseEvent) {
   const mouseX = (clientX / width) * 2 - 1;
   const mouseY = (clientY / height) * 2 - 1;
 
-  if (loginCard.value) {
+  // Use loginCard.value.$el
+  if (loginCard.value && loginCard.value.$el) {
     const rotateY = mouseX * 8;
     const rotateX = -mouseY * 8;
-    loginCard.value.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+    loginCard.value.$el.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
 
-    const rect = loginCard.value.getBoundingClientRect();
+    const rect = loginCard.value.$el.getBoundingClientRect();
     const shineX = event.clientX - rect.left;
     const shineY = event.clientY - rect.top;
-    loginCard.value.style.setProperty('--shine-x', `${shineX}px`);
-    loginCard.value.style.setProperty('--shine-y', `${shineY}px`);
-    loginCard.value.style.setProperty('--shine-opacity', '1');
+    loginCard.value.$el.style.setProperty('--shine-x', `${shineX}px`);
+    loginCard.value.$el.style.setProperty('--shine-y', `${shineY}px`);
+    loginCard.value.$el.style.setProperty('--shine-opacity', '1');
   }
   
   if (backgroundVideo.value) {
@@ -174,9 +174,10 @@ function handleMouseMove(event: MouseEvent) {
 }
 
 function handleMouseLeave() {
-  if (loginCard.value) {
-    loginCard.value.style.transform = 'rotateX(0deg) rotateY(0deg)';
-    loginCard.value.style.setProperty('--shine-opacity', '0');
+  // Use loginCard.value.$el
+  if (loginCard.value && loginCard.value.$el) {
+    loginCard.value.$el.style.transform = 'rotateX(0deg) rotateY(0deg)';
+    loginCard.value.$el.style.setProperty('--shine-opacity', '0');
   }
   if (backgroundVideo.value) {
     backgroundVideo.value.style.transform = 'translateX(0px) translateY(0px) scale(1.1)';
