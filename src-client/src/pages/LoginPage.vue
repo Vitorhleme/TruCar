@@ -104,6 +104,7 @@ import { useQuasar } from 'quasar';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from 'stores/auth-store';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const loginCard = ref<any>(null);
 const backgroundVideo = ref<HTMLVideoElement | null>(null);
 
