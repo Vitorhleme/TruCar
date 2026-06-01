@@ -427,3 +427,9 @@ async def remove(db: AsyncSession, *, id: int, organization_id: int) -> Optional
     if db_obj:
         await db.delete(db_obj)
     return db_obj
+
+async def count(db: AsyncSession, *, organization_id: int) -> int:
+    """Retorna o número total de peças cadastradas para a organização."""
+    stmt = select(func.count(Part.id)).where(Part.organization_id == organization_id)
+    result = await db.execute(stmt)
+    return result.scalar_one() or 0

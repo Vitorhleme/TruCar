@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict
-
+from app.crud import crud_part 
 from app import crud, deps
 from app.models.user_model import User, UserRole
 
