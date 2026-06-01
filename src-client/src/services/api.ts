@@ -10,7 +10,7 @@ const getBaseURL = () => {
   }
   // Para qualquer outro caso (como ao gerar o build para produção),
   // ele usará a URL do servidor na nuvem.
-  return 'https://trucar-at4e.onrender.com'; // URL para produção
+  return 'https://trucar.ravitex.com.br/api'; // URL para produção
 };
 
 const api = axios.create({
