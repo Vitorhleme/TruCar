@@ -188,7 +188,8 @@ import visual3 from 'assets/register-visual-3.jpg';
 import visual4 from 'assets/register-visual-4.jpg';
 
 const formPanel = ref<HTMLElement | null>(null);
-const registerCard = ref<HTMLElement | null>(null);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const registerCard = ref<any>(null);
 const router = useRouter();
 const $q = useQuasar();
 const isLoading = ref(false);
@@ -262,19 +263,22 @@ async function onSubmit() {
 }
 
 function handleMouseMove(event: MouseEvent) {
-  if (registerCard.value) {
-    const rect = registerCard.value.getBoundingClientRect();
+  // Verifique se o componente e o elemento HTML real ($el) existem
+  if (registerCard.value && registerCard.value.$el) {
+    const rect = registerCard.value.$el.getBoundingClientRect();
     const shineX = event.clientX - rect.left;
     const shineY = event.clientY - rect.top;
-    registerCard.value.style.setProperty('--shine-x', `${shineX}px`);
-    registerCard.value.style.setProperty('--shine-y', `${shineY}px`);
-    registerCard.value.style.setProperty('--shine-opacity', '1');
+    
+    registerCard.value.$el.style.setProperty('--shine-x', `${shineX}px`);
+    registerCard.value.$el.style.setProperty('--shine-y', `${shineY}px`);
+    registerCard.value.$el.style.setProperty('--shine-opacity', '1');
   }
 }
 
 function handleMouseLeave() {
-  if (registerCard.value) {
-    registerCard.value.style.setProperty('--shine-opacity', '0');
+  // Use o $el aqui também
+  if (registerCard.value && registerCard.value.$el) {
+    registerCard.value.$el.style.setProperty('--shine-opacity', '0');
   }
 }
 </script>
