@@ -80,10 +80,14 @@ async def get_unread_notifications_count(db: AsyncSession, *, user_id: int, orga
     return result.scalar_one()
 
 async def mark_notification_as_read(db: AsyncSession, *, notification_id: int, user_id: int, organization_id: int) -> Notification | None:
-    stmt = select(Notification).where(
-        Notification.id == notification_id,
-        Notification.user_id == user_id,
-        Notification.organization_id == organization_id
+    stmt = (
+        select(Notification)
+        .where(
+            Notification.id == notification_id,
+            Notification.user_id == user_id,
+            Notification.organization_id == organization_id
+        )
+        .options(selectinload(Notification.vehicle))  # <-- ESTA É A LINHA QUE FALTA
     )
     notification = await db.scalar(stmt)
     
@@ -91,7 +95,11 @@ async def mark_notification_as_read(db: AsyncSession, *, notification_id: int, u
         notification.is_read = True
         db.add(notification)
         await db.commit()
-        await db.refresh(notification)
+        
+        # IMPORTANTE: Quando se usa relações eager (selectinload) com async, 
+        # o db.refresh pode causar problemas se tentar fazer "lazy load" das relações novamente.
+        # Muitas vezes, omitir o refresh após um commit simples de um booleano é a melhor solução.
+        # await db.refresh(notification) 
     return notification
 
 async def run_system_checks_for_organization(db: AsyncSession, *, organization_id: int):
